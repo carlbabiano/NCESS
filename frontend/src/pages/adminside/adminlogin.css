@@ -1,0 +1,395 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Cinzel:wght@600;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─── Root ───────────────────────────────────────── */
+.alog-root {
+  display: flex;
+  min-height: 100vh;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ════════════════════════════════════════════════════
+   LEFT PANEL
+════════════════════════════════════════════════════ */
+.alog-left {
+  flex: 1;
+  position: relative;
+  background:
+    radial-gradient(ellipse at 20% 10%, rgba(37,99,235,0.25) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 85%, rgba(6,182,212,0.18) 0%, transparent 50%),
+    linear-gradient(160deg, #0c1a3a 0%, #0f2460 45%, #0a1a4a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px;
+  overflow: hidden;
+}
+
+/* Subtle dot-grid texture */
+.alog-left::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+/* Decorative rings behind seals */
+.alog-bg-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.04);
+  pointer-events: none;
+}
+.alog-bg-ring--1 { width: 600px; height: 600px; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+.alog-bg-ring--2 { width: 820px; height: 820px; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+.alog-bg-ring--3 { width: 1060px; height: 1060px; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+
+.alog-left__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 540px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  text-align: center;
+}
+
+/* ─── Seals Row ──────────────────────────────────── */
+.alog-seals {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  width: 100%;
+}
+
+.alog-seal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.alog-seal p {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  text-align: center;
+  max-width: 90px;
+  line-height: 1.4;
+}
+
+/* Side seals */
+.alog-seal--side img {
+  width: 88px; height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+  filter: drop-shadow(0 4px 16px rgba(0,0,0,0.5));
+  opacity: 0.85;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.alog-seal--side:hover img { opacity: 1; transform: scale(1.05); }
+
+/* Center hero seal */
+.alog-seal--center { position: relative; }
+
+.alog-seal__glow {
+  position: absolute;
+  width: 160px; height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(250,200,50,0.25) 0%, transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: alogGlowPulse 3s ease-in-out infinite;
+}
+
+@keyframes alogGlowPulse {
+  0%,100% { opacity: 0.7; transform: translate(-50%,-50%) scale(1); }
+  50%      { opacity: 1;   transform: translate(-50%,-50%) scale(1.1); }
+}
+
+.alog-seal--center img {
+  width: 130px; height: 130px;
+  border-radius: 50%;
+  object-fit: cover;
+  filter: drop-shadow(0 6px 24px rgba(0,0,0,0.6));
+  position: relative; z-index: 1;
+  border: 3px solid rgba(255,255,255,0.15);
+  transition: transform 0.25s;
+}
+.alog-seal--center:hover img { transform: scale(1.04); }
+
+.alog-seal--center p {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.75);
+  max-width: 120px;
+}
+
+/* ─── Text Block ─────────────────────────────────── */
+.alog-left__text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  text-align: center;
+}
+
+.alog-left__title-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.alog-left__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(250,204,21,0.8);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.alog-left__title {
+  font-family: 'Cinzel', serif;
+  font-size: 52px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 6px;
+  line-height: 1.1;
+  text-shadow: 0 2px 30px rgba(37,99,235,0.6);
+}
+
+.alog-left__location {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(147,197,253,0.85);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.alog-left__desc {
+  font-size: 13.5px;
+  color: rgba(148,163,184,0.85);
+  line-height: 1.7;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+/* ─── Divider ────────────────────────────────────── */
+.alog-left__divider {
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(37,99,235,0.8), transparent);
+  border-radius: 2px;
+}
+
+/* ─── Stats ──────────────────────────────────────── */
+.alog-stats {
+  display: flex;
+  gap: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.alog-stat {
+  flex: 1;
+  padding: 16px 14px;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  text-align: center;
+}
+.alog-stat:last-child { border-right: none; }
+
+.alog-stat__value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+  margin-bottom: 3px;
+}
+
+.alog-stat__label {
+  font-size: 11px;
+  color: rgba(100,116,139,0.9);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+/* ════════════════════════════════════════════════════
+   RIGHT PANEL — FORM
+════════════════════════════════════════════════════ */
+.alog-right {
+  width: 460px;
+  min-width: 460px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px;
+  box-shadow: -6px 0 40px rgba(0,0,0,0.1);
+}
+
+.alog-form-wrap {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* Mobile header — hidden on desktop */
+.alog-mobile-head { display: none; align-items: center; gap: 12px; }
+.alog-mobile-seal { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+.alog-mobile-title { font-size: 14px; font-weight: 700; color: #111827; margin: 0 0 1px; }
+.alog-mobile-sub   { font-size: 12px; color: #6b7280; margin: 0; }
+
+/* Brand — mirrors ulog-brand */
+.alog-brand { display: flex; align-items: center; gap: 12px; }
+.alog-brand__seal { width: 48px; height: 48px; border-radius: 0; object-fit: contain; flex-shrink: 0; }
+.alog-brand__name { font-size: 15px; font-weight: 800; color: #0f172a; margin: 0 0 1px; letter-spacing: -0.3px; }
+.alog-brand__sub  { font-size: 11px; color: #64748b; margin: 0; font-weight: 500; }
+
+/* Head — mirrors ulog-head */
+.alog-head h2 { font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px; margin: 0 0 5px; }
+.alog-head p  { font-size: 13.5px; color: #64748b; margin: 0; line-height: 1.5; }
+
+/* Error */
+.alog-error {
+  display: flex; align-items: center; gap: 9px;
+  background: #fef2f2; border: 1px solid #fecaca;
+  border-radius: 10px; padding: 11px 14px;
+  font-size: 13.5px; font-weight: 500; color: #dc2626;
+  animation: alogShake 0.3s ease;
+}
+@keyframes alogShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+.alog-error svg { width: 16px; height: 16px; stroke: #ef4444; flex-shrink: 0; }
+
+/* Form */
+.alog-form { display: flex; flex-direction: column; gap: 16px; }
+
+/* Fields */
+.alog-field { display: flex; flex-direction: column; gap: 6px; }
+.alog-field label { font-size: 13px; font-weight: 600; color: #374151; }
+.alog-field__label-row { display: flex; align-items: center; justify-content: space-between; }
+.alog-forgot { font-size: 12.5px; font-weight: 600; color: #2563eb; text-decoration: none; }
+.alog-forgot:hover { text-decoration: underline; }
+
+/* Input wrap */
+.alog-input-wrap { position: relative; display: flex; align-items: center; }
+.alog-input-icon { position: absolute; left: 13px; width: 17px; height: 17px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.alog-input-icon svg { width: 17px; height: 17px; stroke: #9ca3af; }
+
+.alog-input-wrap input {
+  width: 100%;
+  padding: 11px 44px 11px 42px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px; color: #111827;
+  font-family: 'DM Sans', sans-serif;
+  background: #fff; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.alog-input-wrap input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+.alog-input-wrap input::placeholder { color: #9ca3af; }
+
+.alog-pw-toggle { position: absolute; right: 13px; width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; color: #9ca3af; transition: color 0.15s; }
+.alog-pw-toggle:hover { color: #374151; }
+.alog-pw-toggle svg { width: 17px; height: 17px; stroke: currentColor; }
+
+/* Remember */
+.alog-remember { display: flex; align-items: center; gap: 9px; }
+.alog-checkbox { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #d1d5db; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s; flex-shrink: 0; padding: 0; }
+.alog-checkbox--checked { background: #2563eb; border-color: #2563eb; }
+.alog-checkbox svg { width: 11px; height: 11px; stroke: #fff; }
+.alog-remember__label { font-size: 13.5px; color: #374151; font-weight: 500; }
+
+/* Submit */
+.alog-submit {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  width: 100%; padding: 13px; border-radius: 11px;
+  border: none;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  color: #fff; font-size: 14.5px; font-weight: 700;
+  font-family: 'DM Sans', sans-serif; cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 4px 16px rgba(37,99,235,0.4);
+  margin-top: 4px;
+}
+.alog-submit svg { width: 17px; height: 17px; stroke: #fff; transition: transform 0.2s; }
+.alog-submit:hover { opacity: 0.93; box-shadow: 0 6px 22px rgba(37,99,235,0.5); }
+.alog-submit:hover svg { transform: translateX(3px); }
+.alog-submit:active { transform: scale(0.99); }
+.alog-submit:disabled { opacity: 0.65; cursor: not-allowed; }
+
+/* Spinner */
+.alog-spinner { width: 17px; height: 17px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: alogSpin 0.7s linear infinite; flex-shrink: 0; }
+@keyframes alogSpin { to { transform: rotate(360deg); } }
+
+/* Divider */
+.alog-divider { display: flex; align-items: center; gap: 12px; }
+.alog-divider::before,.alog-divider::after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
+.alog-divider span { color: #9ca3af; font-size: 12.5px; font-weight: 500; }
+
+/* Resident link */
+.alog-resident-link {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px; border-radius: 11px; border: 1.5px solid #e5e7eb;
+  background: #fff; font-size: 13.5px; font-weight: 600; color: #374151;
+  text-decoration: none; transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.alog-resident-link:hover { background: #f8fafc; border-color: #2563eb; color: #2563eb; }
+.alog-resident-link svg { width: 16px; height: 16px; stroke: currentColor; }
+
+/* Footer note */
+.alog-footer-note { font-size: 11.5px; color: #cbd5e1; text-align: center; line-height: 1.6; }
+
+/* ─── Responsive ─────────────────────────────────── */
+@media (max-width: 960px) {
+  /* Stack panels vertically */
+  .alog-root { flex-direction: column; }
+
+  /* Left panel — visible, compact */
+  .alog-left {
+    display: flex;
+    flex: none;
+    min-height: unset;
+    padding: 32px 24px 28px;
+  }
+
+  .alog-left__inner { gap: 20px; }
+
+  /* Scale down seals */
+  .alog-seals { gap: 14px; }
+  .alog-seal--side img   { width: 60px; height: 60px; }
+  .alog-seal--center img { width: 88px; height: 88px; }
+  .alog-seal__glow       { width: 110px; height: 110px; }
+  .alog-seal p           { font-size: 9.5px; max-width: 70px; }
+  .alog-seal--center p   { font-size: 10px; max-width: 90px; }
+
+  /* Scale down title */
+  .alog-left__title { font-size: 34px; letter-spacing: 4px; }
+  .alog-left__desc  { font-size: 12.5px; }
+
+  /* Stats — keep in a row but tighter */
+  .alog-stats       { width: 100%; }
+  .alog-stat        { padding: 12px 8px; }
+  .alog-stat__value { font-size: 18px; }
+  .alog-stat__label { font-size: 10px; }
+
+  /* Right panel — full width, no side shadow */
+  .alog-right { width: 100%; min-width: 0; padding: 36px 24px; box-shadow: none; }
+
+  /* Hide both mobile-head and brand — left panel handles branding */
+  .alog-mobile-head { display: none; }
+  .alog-brand       { display: none; }
+}

@@ -1,0 +1,1025 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
+/* ─── Page Shell ─────────────────────────────────── */
+.ann-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f8f9fb;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ─── Page Header ────────────────────────────────── */
+.ann-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 28px 32px 0;
+  gap: 16px;
+}
+
+.ann-header__left h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px;
+  letter-spacing: -0.4px;
+}
+
+.ann-header__left p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.ann-header__btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.ann-header__btn:hover {
+  background: #1d4ed8;
+}
+
+.ann-header__btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: #fff;
+}
+
+/* ─── Filter Tabs ────────────────────────────────── */
+.ann-filters {
+  display: flex;
+  gap: 8px;
+  padding: 20px 32px 0;
+  flex-wrap: wrap;
+}
+
+.ann-filter-btn {
+  padding: 7px 16px;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+}
+
+.ann-filter-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.ann-filter-btn--active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ─── Announcement List ──────────────────────────── */
+.ann-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 32px 40px;
+}
+
+.ann-empty {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 14px;
+  padding: 48px 0;
+}
+
+/* ─── Card ───────────────────────────────────────── */
+.ann-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e9ecef;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.ann-card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+}
+
+/* ─── Card Image ─────────────────────────────────── */
+.ann-card__image-wrap {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  overflow: hidden;
+}
+
+.ann-card__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+.ann-card:hover .ann-card__image {
+  transform: scale(1.02);
+}
+
+.ann-card__no-img {
+  width: 100%;
+  height: 100%;
+  background: #f3f4f6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #9ca3af;
+}
+
+.ann-card__no-img svg {
+  stroke: #c9cdd4;
+}
+
+.ann-card__no-img span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #9ca3af;
+  letter-spacing: 0.01em;
+}
+
+.ann-modal__no-img {
+  height: 100%;
+}
+
+.ann-modal__no-img svg {
+  width: 36px;
+  height: 36px;
+}
+
+.ann-card__category {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.2px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.ann-card__pinned {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-family: 'DM Sans', sans-serif;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+/* Category color variants */
+.category--environment {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.category--health {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.category--safety {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.category--events {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.category--services {
+  background: #fce7f3;
+  color: #9d174d;
+}
+
+/* ─── Card Body ──────────────────────────────────── */
+.ann-card__body {
+  padding: 18px 22px 16px;
+}
+
+.ann-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.ann-card__author {
+  font-weight: 600;
+  color: #374151;
+}
+
+.ann-card__dot {
+  color: #d1d5db;
+}
+
+.ann-card__date {
+  color: #9ca3af;
+}
+
+.ann-card__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 10px;
+  letter-spacing: -0.3px;
+  line-height: 1.35;
+}
+
+.ann-card__desc {
+  font-size: 13.5px;
+  color: #6b7280;
+  line-height: 1.65;
+  margin: 0 0 16px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ─── Card Footer ────────────────────────────────── */
+.ann-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.ann-card__timestamps {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.ann-card__ts {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.ann-card__ts svg { stroke: #c4c9d4; flex-shrink: 0; }
+
+.ann-card__ts--updated { color: #6366f1; }
+.ann-card__ts--updated svg { stroke: #a5b4fc; }
+
+.ann-modal__timestamps {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.ann-card__read-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.ann-card__read-btn:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.ann-card__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ann-card__icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  color: #6b7280;
+}
+
+.ann-card__icon-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+}
+
+.ann-card__icon-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.ann-card__icon-btn--delete:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #ef4444;
+}
+
+/* ─── Modal ──────────────────────────────────────── */
+.ann-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.ann-modal {
+  background: #fff;
+  border-radius: 16px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.ann-modal__image-wrap {
+  position: relative;
+  height: 280px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.ann-modal__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ann-modal__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  transition: background 0.15s;
+}
+
+.ann-modal__close:hover {
+  background: rgba(0,0,0,0.75);
+}
+
+.ann-modal__close svg {
+  width: 16px;
+  height: 16px;
+  stroke: #fff;
+}
+
+.ann-modal__body {
+  padding: 22px 26px 28px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ann-modal__title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  margin: 8px 0 12px;
+  letter-spacing: -0.3px;
+  line-height: 1.35;
+}
+
+.ann-modal__desc {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.75;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* ─── Responsive ─────────────────────────────────── */
+@media (max-width: 768px) {
+  .ann-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ann-topbar__search {
+    width: 200px;
+  }
+
+  .ann-list {
+    padding: 16px;
+  }
+
+  .ann-header {
+    padding: 20px 16px 0;
+  }
+
+  .ann-filters {
+    padding: 16px 16px 0;
+  }
+}
+/* ─── Toast Notification ─────────────────────────── */
+.ann-toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #111827;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  padding: 12px 18px;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  animation: slideUp 0.25s ease;
+}
+
+.ann-toast svg {
+  stroke: #4ade80;
+  flex-shrink: 0;
+}
+
+/* ─── Post / Edit Modal ──────────────────────────── */
+.ann-post-modal {
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ann-post-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #f3f4f6;
+  flex-shrink: 0;
+}
+
+.ann-post-modal__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px;
+  letter-spacing: -0.3px;
+}
+
+.ann-post-modal__subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.ann-modal__close--inline {
+  position: static;
+  background: #f3f4f6;
+  color: #6b7280;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ann-modal__close--inline:hover {
+  background: #e5e7eb;
+}
+
+.ann-modal__close--inline svg {
+  stroke: #6b7280;
+}
+
+.ann-post-modal__body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ann-post-modal__footer {
+  padding: 16px 24px;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* ─── Form Elements ──────────────────────────────── */
+.ann-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ann-form-group--row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.ann-form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.ann-form-input {
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #fff;
+}
+
+.ann-form-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.ann-form-input::placeholder {
+  color: #9ca3af;
+}
+
+.ann-form-textarea {
+  resize: vertical;
+  min-height: 110px;
+  line-height: 1.6;
+}
+
+/* Category pill buttons in form */
+.ann-form-category-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ann-form-cat-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 2px solid transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: all 0.15s;
+  opacity: 0.6;
+}
+
+.ann-form-cat-btn--active {
+  opacity: 1;
+  border-color: currentColor;
+}
+
+/* ─── Toggle Switch ──────────────────────────────── */
+.ann-form-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ann-form-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.ann-form-toggle__track {
+  width: 40px;
+  height: 22px;
+  background: #d1d5db;
+  border-radius: 11px;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.ann-form-toggle input:checked + .ann-form-toggle__track {
+  background: #2563eb;
+}
+
+.ann-form-toggle__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.ann-form-toggle input:checked ~ .ann-form-toggle__track .ann-form-toggle__thumb {
+  transform: translateX(18px);
+}
+
+.ann-form-toggle__label {
+  font-size: 13.5px;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* ─── Form Error ─────────────────────────────────── */
+.ann-form-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 500;
+}
+
+/* ─── Modal Buttons ──────────────────────────────── */
+.ann-post-modal__cancel {
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ann-post-modal__cancel:hover {
+  background: #f9fafb;
+}
+
+.ann-post-modal__submit {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: none;
+  background: #2563eb;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ann-post-modal__submit:hover {
+  background: #1d4ed8;
+}
+
+/* ─── Delete Confirm Modal ───────────────────────── */
+.ann-confirm-modal {
+  background: #fff;
+  border-radius: 16px;
+  max-width: 400px;
+  width: 100%;
+  padding: 28px 28px 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  text-align: center;
+  animation: slideUp 0.2s ease;
+}
+
+.ann-confirm-modal__icon {
+  width: 52px;
+  height: 52px;
+  background: #fef2f2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: #ef4444;
+}
+
+.ann-confirm-modal__icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: #ef4444;
+}
+
+.ann-confirm-modal__title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.ann-confirm-modal__desc {
+  font-size: 13.5px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0 0 22px;
+}
+
+.ann-confirm-modal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.ann-confirm-modal__delete {
+  padding: 9px 20px;
+  border-radius: 10px;
+  border: none;
+  background: #ef4444;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+/* ─── Image Upload ───────────────────────────────── */
+.ann-form-label__hint {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #9ca3af;
+}
+
+.ann-img-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  padding: 28px 20px;
+  cursor: pointer;
+  background: #fafafa;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: center;
+}
+
+.ann-img-dropzone:hover,
+.ann-img-dropzone--over {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.ann-img-dropzone--over {
+  border-style: solid;
+}
+
+.ann-img-dropzone__icon {
+  color: #9ca3af;
+  transition: color 0.15s;
+}
+
+.ann-img-dropzone:hover .ann-img-dropzone__icon,
+.ann-img-dropzone--over .ann-img-dropzone__icon {
+  color: #2563eb;
+}
+
+.ann-img-dropzone__text {
+  font-size: 13.5px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.ann-img-dropzone__text strong {
+  color: #2563eb;
+}
+
+.ann-img-dropzone__hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* ─── Image Preview ──────────────────────────────── */
+.ann-img-preview {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  height: 180px;
+  border: 1.5px solid #e5e7eb;
+}
+
+.ann-img-preview__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ann-img-preview__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ann-img-preview:hover .ann-img-preview__overlay {
+  opacity: 1;
+}
+
+.ann-img-preview__change,
+.ann-img-preview__remove {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s;
+}
+
+.ann-img-preview__change {
+  background: #fff;
+  color: #374151;
+}
+
+.ann-img-preview__remove {
+  background: #ef4444;
+  color: #fff;
+}
+
+.ann-img-preview__change:hover,
+.ann-img-preview__remove:hover {
+  opacity: 0.88;
+}
+.ann-confirm-modal__delete:hover {
+  background: #dc2626;
+}
+
+/* ─── Mobile Responsive ──────────────────────── */
+@media (max-width: 767px) {
+  .ann-header {
+    padding: 20px 16px 0;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+  .ann-header__left h1 { font-size: 20px; }
+  .ann-header__btn {
+    width: 100%;
+    justify-content: center;
+    padding: 11px 16px;
+  }
+
+  .ann-filters {
+    padding: 14px 16px 0;
+    gap: 6px;
+  }
+  .ann-filter-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+
+  .ann-list {
+    padding: 16px 16px 32px;
+    gap: 16px;
+  }
+
+  .ann-card__image-wrap { height: 180px; }
+  .ann-card__title { font-size: 15px; }
+  .ann-card__body { padding: 14px 16px 12px; }
+
+  .ann-card__footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .ann-card__read-btn { font-size: 13px; }
+  .ann-card__actions { align-self: flex-end; }
+
+  .ann-card__timestamps { gap: 8px; flex-direction: column; }
+
+  /* Modal centered on mobile */
+  .ann-modal-overlay { padding: 16px; align-items: center; }
+  .ann-modal {
+    max-width: 100%;
+    border-radius: 16px;
+    max-height: 92vh;
+  }
+  .ann-modal__image-wrap { height: 200px; }
+
+  .ann-post-modal__footer {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  .ann-post-modal__cancel,
+  .ann-post-modal__submit {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ann-confirm-modal {
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px 20px;
+  }
+  .ann-confirm-modal__actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  .ann-post-modal__cancel,
+  .ann-confirm-modal__delete { width: 100%; }
+
+  .ann-toast {
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    font-size: 13px;
+  }
+
+  .ann-form-category-row { gap: 6px; }
+  .ann-form-cat-btn { font-size: 12px; padding: 5px 10px; }
+}

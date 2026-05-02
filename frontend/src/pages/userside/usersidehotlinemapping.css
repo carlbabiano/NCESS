@@ -1,0 +1,563 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
+/* ── Page Shell ── */
+.uhl-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f8f9fb;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.uhl-main {
+  padding: 28px 32px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── Page Heading ── */
+.uhl-heading__text h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px;
+  letter-spacing: -0.4px;
+}
+.uhl-heading__text p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* ── Hero Banner ── */
+.uhl-hero {
+  background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 60%, #2563eb 100%);
+  border-radius: 18px;
+  padding: 28px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.uhl-hero::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+}
+.uhl-hero::after {
+  content: '';
+  position: absolute;
+  bottom: -60px;
+  left: 30%;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+}
+.uhl-hero__left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  z-index: 1;
+}
+.uhl-hero__icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.uhl-hero__icon-wrap svg {
+  width: 32px;
+  height: 32px;
+  stroke: #fff;
+}
+.uhl-hero__text h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 4px;
+  letter-spacing: -0.3px;
+}
+.uhl-hero__text p {
+  font-size: 13.5px;
+  color: rgba(255,255,255,0.75);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.uhl-hero__numbers {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.uhl-hero__num {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s;
+  letter-spacing: 0.3px;
+}
+.uhl-hero__num:hover {
+  background: rgba(255,255,255,0.25);
+}
+.uhl-hero__num svg {
+  width: 13px;
+  height: 13px;
+  stroke: rgba(255,255,255,0.8);
+}
+.uhl-hero__right {
+  z-index: 1;
+  text-align: right;
+  flex-shrink: 0;
+}
+.uhl-hero__tip {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 12px;
+  padding: 14px 18px;
+  max-width: 220px;
+}
+.uhl-hero__tip-icon {
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+.uhl-hero__tip p {
+  font-size: 12.5px;
+  color: rgba(255,255,255,0.85);
+  margin: 0;
+  line-height: 1.55;
+  text-align: left;
+}
+.uhl-hero__tip strong {
+  color: #fff;
+}
+
+/* ── Grid Layout ── */
+.uhl-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
+}
+.uhl-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.uhl-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Panel ── */
+.uhl-panel {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e9ecef;
+  overflow: hidden;
+}
+.uhl-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  gap: 12px;
+}
+.uhl-panel__header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.uhl-panel__header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.uhl-panel__header-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+.uhl-panel__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 2px;
+}
+.uhl-panel__sub {
+  font-size: 12.5px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* ── Contact List ── */
+.uhl-contact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.uhl-contact-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.12s;
+}
+.uhl-contact-item:last-child {
+  border-bottom: none;
+}
+.uhl-contact-item:hover {
+  background: #fafbfc;
+}
+.uhl-contact-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.uhl-contact-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.uhl-contact-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+.uhl-contact-body {
+  flex: 1;
+  min-width: 0;
+}
+.uhl-contact-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 2px;
+}
+.uhl-contact-desc {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 0;
+}
+.uhl-contact-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity 0.15s, transform 0.1s;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+.uhl-contact-call:hover {
+  opacity: 0.82;
+  transform: translateY(-1px);
+}
+.uhl-contact-call svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+}
+
+/* Color Schemes */
+.uhl-scheme--red    { background: #fee2e2; color: #b91c1c; }
+.uhl-scheme--blue   { background: #dbeafe; color: #1d4ed8; }
+.uhl-scheme--amber  { background: #fef3c7; color: #92400e; }
+.uhl-scheme--green  { background: #d1fae5; color: #065f46; }
+.uhl-scheme--purple { background: #ede9fe; color: #5b21b6; }
+.uhl-scheme--indigo { background: #e0e7ff; color: #3730a3; }
+
+.uhl-call--red    { background: #fee2e2; color: #b91c1c; }
+.uhl-call--blue   { background: #dbeafe; color: #1d4ed8; }
+.uhl-call--amber  { background: #fef3c7; color: #92400e; }
+.uhl-call--green  { background: #d1fae5; color: #065f46; }
+.uhl-call--purple { background: #ede9fe; color: #5b21b6; }
+.uhl-call--indigo { background: #e0e7ff; color: #3730a3; }
+
+/* ── Tips ── */
+.uhl-tips-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+.uhl-tip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 22px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.uhl-tip-item:last-child { border-bottom: none; }
+.uhl-tip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2563eb;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.uhl-tip-text {
+  font-size: 13px;
+  color: #374151;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ── Hours ── */
+.uhl-hours-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+.uhl-hour-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 11px 22px;
+  border-bottom: 1px solid #f3f4f6;
+  gap: 12px;
+}
+.uhl-hour-item:last-child { border-bottom: none; }
+.uhl-hour-day { font-size: 13px; font-weight: 500; color: #374151; }
+.uhl-hour-time { font-size: 12.5px; font-weight: 600; color: #111827; }
+.uhl-hour-closed { font-size: 12.5px; font-weight: 600; color: #ef4444; }
+
+/* ── Reminder Card ── */
+.uhl-reminder {
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  border: 1px solid #fde68a;
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.uhl-reminder__icon { font-size: 22px; flex-shrink: 0; line-height: 1; }
+.uhl-reminder__text h4 { font-size: 13.5px; font-weight: 700; color: #92400e; margin: 0 0 5px; }
+.uhl-reminder__text p { font-size: 12.5px; color: #78350f; margin: 0; line-height: 1.55; }
+
+/* ── Empty ── */
+.uhl-empty {
+  padding: 32px 22px;
+  text-align: center;
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+/* ── Responsive ── */
+
+/* Tablet — collapse grid, stack hero */
+@media (max-width: 1100px) {
+  .uhl-grid { grid-template-columns: 1fr; }
+  .uhl-main { padding: 20px 16px 40px; }
+  .uhl-hero { flex-direction: column; align-items: flex-start; }
+  .uhl-hero__right { align-self: stretch; }
+  .uhl-hero__tip { max-width: 100%; }
+}
+
+/* Mobile large — tighten spacing */
+@media (max-width: 768px) {
+  .uhl-main {
+    padding: 16px 12px 36px;
+    gap: 16px;
+  }
+
+  /* Heading */
+  .uhl-heading__text h1 {
+    font-size: 20px;
+    letter-spacing: -0.2px;
+  }
+  .uhl-heading__text p {
+    font-size: 13px;
+  }
+
+  /* Hero */
+  .uhl-hero {
+    padding: 20px 18px;
+    border-radius: 14px;
+    gap: 16px;
+  }
+  .uhl-hero__left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .uhl-hero__icon-wrap {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+  }
+  .uhl-hero__icon-wrap svg {
+    width: 24px;
+    height: 24px;
+  }
+  .uhl-hero__text h2 {
+    font-size: 16px;
+  }
+  .uhl-hero__text p {
+    font-size: 12.5px;
+    margin-bottom: 10px;
+  }
+  .uhl-hero__numbers {
+    gap: 6px;
+  }
+  .uhl-hero__num {
+    font-size: 13px;
+    padding: 5px 11px;
+  }
+  .uhl-hero__tip {
+    padding: 12px 14px;
+  }
+  .uhl-hero__tip p {
+    font-size: 12px;
+  }
+
+  /* Panels */
+  .uhl-panel {
+    border-radius: 12px;
+  }
+  .uhl-panel__header {
+    padding: 14px 16px 12px;
+  }
+  .uhl-panel__header-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .uhl-panel__title {
+    font-size: 14px;
+  }
+  .uhl-panel__sub {
+    font-size: 12px;
+  }
+
+  /* Contact items — stack call button below text on very small */
+  .uhl-contact-item {
+    padding: 12px 16px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .uhl-contact-name {
+    font-size: 13px;
+  }
+  .uhl-contact-desc {
+    font-size: 11.5px;
+  }
+  .uhl-contact-call {
+    font-size: 12px;
+    padding: 6px 11px;
+  }
+
+  /* Tips & hours */
+  .uhl-tip-item {
+    padding: 10px 16px;
+  }
+  .uhl-tip-text {
+    font-size: 12.5px;
+  }
+  .uhl-hour-item {
+    padding: 10px 16px;
+  }
+  .uhl-hour-day,
+  .uhl-hour-time,
+  .uhl-hour-closed {
+    font-size: 12.5px;
+  }
+
+  /* Reminder */
+  .uhl-reminder {
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .uhl-reminder__text h4 { font-size: 13px; }
+  .uhl-reminder__text p  { font-size: 12px; }
+}
+
+/* Mobile small — stack call button below contact body */
+@media (max-width: 480px) {
+  .uhl-main {
+    padding: 12px 10px 32px;
+    gap: 14px;
+  }
+
+  .uhl-heading__text h1 { font-size: 18px; }
+
+  .uhl-hero {
+    padding: 16px 14px;
+    border-radius: 12px;
+  }
+  .uhl-hero__text h2 { font-size: 15px; }
+  .uhl-hero__num {
+    font-size: 12.5px;
+    padding: 5px 10px;
+  }
+
+  /* Stack contact row — name/desc take full width, call spans below */
+  .uhl-contact-item {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 11px 14px;
+  }
+  .uhl-contact-body {
+    flex: 1 1 100%;
+    margin-left: 0 !important; /* override inline style */
+  }
+  .uhl-contact-call {
+    flex: 1 1 100%;
+    justify-content: center;
+    font-size: 12.5px;
+    padding: 8px 12px;
+    border-radius: 8px;
+  }
+
+  .uhl-panel__header {
+    padding: 12px 14px 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .uhl-tip-item  { padding: 9px 14px; }
+  .uhl-hour-item { padding: 9px 14px; }
+  .uhl-reminder  { padding: 12px 14px; }
+}

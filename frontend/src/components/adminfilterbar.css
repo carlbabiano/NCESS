@@ -1,0 +1,190 @@
+/* ─── AdminFilterBar ─────────────────────────────── */
+.admin-filterbar-wrapper {
+  display: flex;
+  flex-direction: column;
+  margin: 0 32px 16px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.admin-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+}
+
+/* ── Search ── */
+.admin-filterbar__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #f9fafb;
+  min-width: min(260px, 100%);
+  flex: 1 1 220px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.admin-filterbar__search:focus-within {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+  background: #fff;
+}
+
+.admin-filterbar__search svg {
+  width: 15px;
+  height: 15px;
+  stroke: #9ca3af;
+  flex-shrink: 0;
+}
+
+.admin-filterbar__search input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #374151;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.admin-filterbar__search input::placeholder {
+  color: #b0b7c3;
+}
+
+/* ── Divider between search and tabs ── */
+.admin-filterbar__divider {
+  width: 1px;
+  height: 24px;
+  background: #e9ecef;
+  flex-shrink: 0;
+}
+
+/* ── Status Tabs ── */
+.admin-filterbar__tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+.admin-filterbar__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.admin-filterbar__tab:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.admin-filterbar__tab--active {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+/* ── Badge count on tab ── */
+.admin-filterbar__count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.admin-filterbar__tab--active .admin-filterbar__count {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+/* ── Right-side actions ── */
+.admin-filterbar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.admin-filterbar__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ─── Compact variant (no card wrapping) ─────────── */
+.admin-filterbar--compact {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* ─── Responsive ──────────────────────────────────── */
+@media (max-width: 720px) {
+  .admin-filterbar-wrapper {
+    margin: 0 16px 12px;
+  }
+
+  .admin-filterbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .admin-filterbar__search {
+    width: 100%;
+  }
+
+  .admin-filterbar__divider {
+    display: none;
+  }
+
+  .admin-filterbar__tabs {
+    width: 100%;
+    gap: 4px;
+  }
+
+  .admin-filterbar__tab {
+    flex: 1 1 auto;
+    justify-content: center;
+    height: 34px;
+    font-size: 12px;
+  }
+
+  .admin-filterbar__right {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

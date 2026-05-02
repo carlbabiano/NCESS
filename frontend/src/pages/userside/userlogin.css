@@ -1,0 +1,386 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Cinzel:wght@600;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+.ulog-root {
+  display: flex;
+  min-height: 100vh;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ════════════════════════════════════════════
+   LEFT — DECORATIVE  (matches su-left)
+════════════════════════════════════════════ */
+.ulog-left {
+  flex: 1;
+  position: relative;
+  background: linear-gradient(160deg, #0c1a3a 0%, #0f2460 50%, #0a3060 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 44px;
+  overflow: hidden;
+}
+
+.ulog-left::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+.ulog-left__bg {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 20% 15%, rgba(37,99,235,0.22) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 85%, rgba(6,182,212,0.14) 0%, transparent 50%);
+}
+
+.ulog-left__content {
+  position: relative; z-index: 1;
+  max-width: 420px; width: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 32px; text-align: center;
+}
+
+/* Seals — identical to su-seals */
+.ulog-seals {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 32px;
+  width: 100%;
+}
+
+.ulog-seal-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ulog-seal-item img {
+  width: 88px; height: 88px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 14px rgba(0,0,0,0.45));
+  opacity: 0.85;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.ulog-seal-item:hover img { opacity: 1; transform: scale(1.05); }
+
+.ulog-seal-item--center img {
+  width: 120px; height: 120px;
+  opacity: 1;
+}
+
+.ulog-seal-item p {
+  font-size: 10.5px; font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  text-align: center; max-width: 90px; line-height: 1.4;
+}
+
+.ulog-seal-item--center p {
+  font-size: 11.5px; font-weight: 700;
+  color: rgba(255,255,255,0.75);
+}
+
+/* Left text */
+.ulog-left__text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  text-align: center;
+}
+
+.ulog-left__title-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ulog-left__eyebrow {
+  font-size: 10.5px; font-weight: 700;
+  color: rgba(250,204,21,0.75);
+  letter-spacing: 1.5px; text-transform: uppercase;
+}
+
+.ulog-left__title {
+  font-family: 'Cinzel', serif;
+  font-size: 42px; font-weight: 700;
+  color: #fff; letter-spacing: 5px; line-height: 1.1;
+  text-shadow: 0 2px 24px rgba(37,99,235,0.5);
+  margin-bottom: 6px;
+}
+
+.ulog-left__subtitle {
+  font-size: 12.5px; font-weight: 600;
+  color: rgba(147,197,253,0.85);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.ulog-left__desc {
+  font-size: 13px; color: rgba(148,163,184,0.85);
+  line-height: 1.7; max-width: 320px; margin: 0 auto;
+}
+
+/* Feature list — sidebar SVG icons (matches su-perks) */
+.ulog-features {
+  list-style: none;
+  display: flex; flex-direction: column;
+  gap: 8px; width: 100%;
+  text-align: left;
+}
+
+.ulog-feature {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px; padding: 10px 14px;
+  transition: background 0.15s;
+}
+
+.ulog-feature:hover { background: rgba(255,255,255,0.08); }
+
+.ulog-feature__icon {
+  width: 18px; height: 18px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(147,197,253,0.85);
+}
+
+.ulog-feature__icon svg {
+  width: 18px; height: 18px;
+  stroke: currentColor;
+}
+
+.ulog-feature__label {
+  font-size: 13px; font-weight: 500;
+  color: rgba(203,213,225,0.85);
+}
+
+/* ════════════════════════════════════════════
+   RIGHT — FORM  (matches su-right)
+════════════════════════════════════════════ */
+.ulog-right {
+  width: 520px; min-width: 520px;
+  background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  padding: 48px 44px;
+  box-shadow: -6px 0 40px rgba(0,0,0,0.08);
+  overflow-y: auto;
+}
+
+.ulog-form-wrap {
+  width: 100%; max-width: 380px;
+  display: flex; flex-direction: column;
+  gap: 22px;
+}
+
+/* Brand */
+.ulog-brand { display: flex; align-items: center; gap: 12px; }
+
+.ulog-brand__seal {
+  width: 48px; height: 48px;
+  border-radius: 0; object-fit: contain; flex-shrink: 0;
+}
+
+.ulog-brand__name { font-size: 15px; font-weight: 800; color: #0f172a; margin: 0 0 1px; letter-spacing: -0.3px; }
+.ulog-brand__sub  { font-size: 11px; color: #64748b; margin: 0; font-weight: 500; }
+
+/* Head */
+.ulog-head h1 { font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing:-0.4px; margin: 0 0 5px; }
+.ulog-head p  { font-size: 13.5px; color: #64748b; margin: 0; line-height:1.5; }
+
+/* Error */
+.ulog-error { display:flex; align-items:center; gap:9px; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:11px 14px; font-size:13.5px; font-weight:500; color:#dc2626; animation:ulogShake 0.3s ease; }
+@keyframes ulogShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+.ulog-error svg { width:16px; height:16px; stroke:#ef4444; flex-shrink:0; }
+
+/* Status banners */
+.ulog-status-banner { display:flex; gap:12px; align-items:flex-start; border-radius:12px; padding:14px 16px; animation:ulogShake 0.3s ease; }
+.ulog-status-banner--pending { background:#fffbeb; border:1px solid #fcd34d; }
+.ulog-status-banner--rejected { background:#fef2f2; border:1px solid #fecaca; }
+.ulog-status-banner__icon { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.ulog-status-banner--pending .ulog-status-banner__icon { background:#fef3c7; color:#d97706; }
+.ulog-status-banner--rejected .ulog-status-banner__icon { background:#fee2e2; color:#dc2626; }
+.ulog-status-banner__icon svg { width:18px; height:18px; stroke:currentColor; }
+.ulog-status-banner__body { flex:1; }
+.ulog-status-banner__title { font-size:13.5px; font-weight:700; margin:0 0 4px; }
+.ulog-status-banner--pending .ulog-status-banner__title  { color:#92400e; }
+.ulog-status-banner--rejected .ulog-status-banner__title { color:#991b1b; }
+.ulog-status-banner__desc { font-size:12.5px; line-height:1.55; margin:0 0 6px; }
+.ulog-status-banner--pending .ulog-status-banner__desc  { color:#a16207; }
+.ulog-status-banner--rejected .ulog-status-banner__desc { color:#b91c1c; }
+.ulog-status-banner__link { font-size:12.5px; font-weight:700; color:#2563eb; text-decoration:none; }
+.ulog-status-banner__link:hover { text-decoration:underline; }
+
+/* Form */
+.ulog-form { display:flex; flex-direction:column; gap:16px; }
+.ulog-field { display:flex; flex-direction:column; gap:6px; }
+.ulog-field label { font-size:13px; font-weight:600; color:#374151; }
+.ulog-field__label-row { display:flex; align-items:center; justify-content:space-between; }
+.ulog-forgot { font-size:12.5px; font-weight:600; color:#2563eb; text-decoration:none; }
+.ulog-forgot:hover { text-decoration:underline; }
+
+.ulog-input-wrap { position:relative; display:flex; align-items:center; }
+.ulog-input-icon { position:absolute; left:13px; width:17px; height:17px; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+.ulog-input-icon svg { width:17px; height:17px; stroke:#9ca3af; }
+
+.ulog-input-wrap input {
+  width:100%; padding:11px 44px 11px 42px;
+  border:1.5px solid #e5e7eb; border-radius:10px;
+  font-size:14px; color:#111827; font-family:'DM Sans',sans-serif;
+  background:#fff; outline:none;
+  transition:border-color 0.15s, box-shadow 0.15s;
+}
+.ulog-input-wrap input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
+.ulog-input-wrap input::placeholder { color:#9ca3af; }
+
+.ulog-pw-toggle { position:absolute; right:13px; width:24px; height:24px; border:none; background:transparent; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; color:#9ca3af; }
+.ulog-pw-toggle:hover { color:#374151; }
+.ulog-pw-toggle svg { width:17px; height:17px; stroke:currentColor; }
+
+.ulog-remember { display:flex; align-items:center; gap:9px; font-size:13.5px; color:#374151; font-weight:500; }
+.ulog-checkbox { width:18px; height:18px; border-radius:5px; border:1.5px solid #d1d5db; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; padding:0; transition:all 0.15s; }
+.ulog-checkbox--checked { background:#2563eb; border-color:#2563eb; }
+.ulog-checkbox svg { width:11px; height:11px; stroke:#fff; }
+
+.ulog-submit {
+  display:flex; align-items:center; justify-content:center; gap:9px;
+  width:100%; padding:13px; border-radius:11px; border:none;
+  background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);
+  color:#fff; font-size:14.5px; font-weight:700;
+  font-family:'DM Sans',sans-serif; cursor:pointer;
+  box-shadow:0 4px 14px rgba(37,99,235,0.35);
+  transition:opacity 0.15s, transform 0.1s; margin-top:4px;
+}
+.ulog-submit svg { width:17px; height:17px; stroke:#fff; transition:transform 0.2s; }
+.ulog-submit:hover { opacity:0.92; }
+.ulog-submit:hover svg { transform:translateX(3px); }
+.ulog-submit:active { transform:scale(0.99); }
+.ulog-submit:disabled { opacity:0.65; cursor:not-allowed; }
+
+.ulog-spinner { width:17px; height:17px; border:2px solid rgba(255,255,255,0.35); border-top-color:#fff; border-radius:50%; animation:ulogSpin 0.7s linear infinite; flex-shrink:0; }
+@keyframes ulogSpin { to { transform:rotate(360deg); } }
+
+.ulog-divider { display:flex; align-items:center; gap:12px; }
+.ulog-divider::before,.ulog-divider::after { content:''; flex:1; height:1px; background:#e5e7eb; }
+.ulog-divider span { color:#9ca3af; font-size:12.5px; font-weight:500; white-space:nowrap; }
+
+.ulog-signup-link {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  padding:11px; border-radius:11px; border:1.5px solid #2563eb;
+  background:#fff; font-size:13.5px; font-weight:700; color:#2563eb;
+  text-decoration:none; transition:background 0.15s;
+}
+.ulog-signup-link:hover { background:#eff6ff; }
+.ulog-signup-link svg { width:16px; height:16px; stroke:currentColor; }
+
+.ulog-footer { font-size:11.5px; color:#cbd5e1; text-align:center; }
+
+/* ════════════════════════════════════════════
+   RESPONSIVE
+════════════════════════════════════════════ */
+@media (max-width: 1000px) {
+  /* Stack panels vertically */
+  .ulog-root { flex-direction: column; }
+
+  /* Left panel — visible, compact */
+  .ulog-left {
+    display: flex;
+    flex: none;
+    min-height: unset;
+    padding: 32px 24px 28px;
+  }
+
+  .ulog-left__content { gap: 20px; }
+
+  /* Scale down seals */
+  .ulog-seals { gap: 18px; }
+  .ulog-seal-item img         { width: 60px; height: 60px; }
+  .ulog-seal-item--center img { width: 88px; height: 88px; }
+  .ulog-seal-item p           { font-size: 9.5px; max-width: 70px; }
+  .ulog-seal-item--center p   { font-size: 10px; max-width: 90px; }
+
+  /* Scale down title */
+  .ulog-left__title { font-size: 34px; letter-spacing: 4px; }
+  .ulog-left__desc  { font-size: 12.5px; }
+
+  /* Hide feature list on tablet — saves vertical space */
+  .ulog-features { display: none; }
+
+  /* Right panel — full width, no side shadow */
+  .ulog-right { width: 100%; min-width: 0; padding: 36px 24px; box-shadow: none; }
+}
+
+@media (max-width: 480px) {
+  .ulog-root { min-height: 100svh; }
+
+  /* Left panel — even more compact on small phones */
+  .ulog-left { padding: 24px 20px 20px; }
+  .ulog-left__content { gap: 16px; }
+  .ulog-seals { gap: 12px; }
+  .ulog-seal-item img         { width: 48px; height: 48px; }
+  .ulog-seal-item--center img { width: 70px; height: 70px; }
+  .ulog-left__title  { font-size: 26px; letter-spacing: 3px; }
+  .ulog-left__subtitle,
+  .ulog-left__desc   { display: none; }
+
+  /* Right panel */
+  .ulog-right {
+    padding: 28px 20px 40px;
+    justify-content: flex-start;
+    align-items: flex-start;
+  }
+
+  .ulog-form-wrap {
+    gap: 18px;
+    max-width: 100%;
+  }
+
+  /* Brand */
+  .ulog-brand__seal { width: 40px; height: 40px; }
+  .ulog-brand__name { font-size: 14px; }
+
+  /* Heading */
+  .ulog-head h1 { font-size: 22px; }
+  .ulog-head p  { font-size: 13px; }
+
+  /* Inputs — bigger touch targets */
+  .ulog-input-wrap input {
+    padding: 13px 44px 13px 42px;
+    font-size: 15px;
+  }
+
+  /* Submit button */
+  .ulog-submit {
+    padding: 15px;
+    font-size: 15px;
+    min-height: 52px;
+  }
+
+  /* Signup link button */
+  .ulog-signup-link {
+    padding: 13px;
+    font-size: 14px;
+    min-height: 50px;
+  }
+
+  /* Remember me */
+  .ulog-remember { font-size: 14px; }
+  .ulog-checkbox { width: 20px; height: 20px; }
+
+  /* Error / banner */
+  .ulog-error { font-size: 13px; }
+  .ulog-status-banner { padding: 12px 14px; }
+
+  /* Footer note */
+  .ulog-footer { font-size: 11px; }
+}

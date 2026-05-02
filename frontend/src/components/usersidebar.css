@@ -1,0 +1,200 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
+
+.usb-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 30;
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .usb-overlay { display: block; }
+}
+
+.usb-sidebar {
+  width: 192px;
+  min-width: 192px;
+  height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e9ecef;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* Brand */
+.usb-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 20px 18px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.usb-brand__icon {
+  width: 32px; height: 32px;
+  background: #2563eb;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 700; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  flex-shrink: 0;
+}
+
+.usb-brand__logo {
+  width: 32px; height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* sidebar__ brand classes used in JSX */
+.sidebar__brand-logo {
+  width: 30px; height: 30px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.usb-brand__name {
+  font-size: 15px; font-weight: 800;
+  color: #1a1a2e; letter-spacing: -0.3px;
+}
+
+/* Resident chip */
+.usb-resident {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 10px 4px;
+  padding: 9px 10px;
+  background: #f0f7ff;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+}
+
+.usb-resident__avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%; object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid #bfdbfe;
+}
+
+.usb-resident__info { flex: 1; min-width: 0; }
+
+.usb-resident__name {
+  font-size: 12px; font-weight: 600;
+  color: #1e40af; margin: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.usb-resident__id {
+  font-size: 10.5px; color: #93c5fd; margin: 0;
+}
+
+.usb-resident__badge {
+  width: 18px; height: 18px;
+  background: #2563eb;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.usb-resident__badge svg { width: 10px; height: 10px; stroke: #fff; }
+
+/* Nav */
+.usb-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 10px;
+  flex: 1;
+}
+
+.usb-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: #6b7280;
+  font-size: 14px; font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  border: none; background: transparent;
+  cursor: pointer; width: 100%; text-align: left;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.usb-nav-item:hover { background: #f3f4f6; color: #111827; }
+
+.usb-nav-item--active {
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.usb-nav-item__icon {
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.usb-nav-item__label { white-space: nowrap; }
+
+/* Bottom */
+.usb-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 10px 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.usb-nav-item--logout { color: #ef4444; }
+.usb-nav-item--logout:hover { background: #fef2f2; color: #dc2626; }
+
+.usb-copyright {
+  font-size: 11px; color: #d1d5db;
+  padding: 8px 12px 0; margin: 0;
+}
+
+/* ─── Mobile responsive sidebar ─────────────── */
+@media (max-width: 1023px) {
+  .usb-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+  }
+  .usb-sidebar--open {
+    transform: translateX(0);
+  }
+}
+/* ─── sidebar__ class aliases (used by JSX) ─────── */
+.sidebar__brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 22px 20px 18px; border-bottom: 1px solid #f0f0f0;
+}
+.sidebar__brand-name { font-size: 15px; font-weight: 800; color: #1a1a2e; letter-spacing: -0.3px; }
+.sidebar__nav { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; flex: 1; }
+.sidebar__nav-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  border-radius: 8px; text-decoration: none; color: #6b7280;
+  font-size: 14px; font-weight: 500; transition: background 0.15s, color 0.15s;
+  border: none; background: transparent; cursor: pointer; width: 100%; text-align: left;
+  font-family: 'DM Sans', sans-serif;
+}
+.sidebar__nav-item:hover { background: #f3f4f6; color: #111827; }
+.sidebar__nav-item--active { background: #eff6ff; color: #2563eb; font-weight: 600; }
+.sidebar__nav-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sidebar__nav-label { white-space: nowrap; }
+.sidebar__bottom { display: flex; flex-direction: column; gap: 2px; padding: 10px 10px 16px; border-top: 1px solid #f0f0f0; }
+.sidebar__nav-item--logout { color: #ef4444; }
+.sidebar__nav-item--logout:hover { background: #fef2f2; color: #dc2626; }
+.sidebar__copyright-separator { border-top: 1px solid #f0f0f0; margin: 0; }
