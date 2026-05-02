@@ -46,7 +46,8 @@ const io = new Server(httpServer, {
   cors: {
     origin: [
       "http://localhost:5173",
-      "http://192.168.100.12:5173"
+      "http://192.168.100.12:5173",
+      "https://ncess.vercel.app"
     ],
     credentials: true
   },
@@ -164,7 +165,8 @@ io.on("connection", (socket) => {
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "http://192.168.100.12:5173"
+    "http://192.168.100.12:5173",
+    "https://ncess.vercel.app"
   ],
   credentials: true
 }));
