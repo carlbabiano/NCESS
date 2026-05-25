@@ -245,9 +245,6 @@ export default function AdminProfileRequest() {
               <h1>Profile Update Requests</h1>
               <p>Review resident-submitted information changes before they are applied.</p>
             </div>
-            <button className="apr-refresh-btn" type="button" onClick={fetchRequests} disabled={loading}>
-              {loading ? 'Loading...' : 'Refresh'}
-            </button>
           </div>
 
           <section className="apr-card">

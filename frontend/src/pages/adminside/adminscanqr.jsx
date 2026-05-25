@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
+import jsQR from 'jsqr';
 import Sidebar from '../../components/adminsidebar';
 import AdminTopbar from '../../components/admintopbar';
 import './adminscanqr.css';
@@ -91,7 +92,7 @@ export default function AdminScanQR() {
       if (!el) {
         setErrorMsg('Scanner element not found. Please try again.');
         setScanState(STATE.ERROR);
-        setTimeout(() => setScanState(STATE.IDLE), 3000);
+        setTimeout(() => setScanState(STATE.IDLE), 5000);
         return;
       }
 
@@ -99,20 +100,58 @@ export default function AdminScanQR() {
         const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, { verbose: false });
         html5QrRef.current = scanner;
 
-        await scanner.start(
-          { facingMode: 'environment' },
-          {
-            fps: 15,
-            qrbox: { width: 280, height: 280 },
-            aspectRatio: 1.0,
-            disableFlip: false,
-            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-          },
-          handleDecode,
-          () => {}
-        );
+        // Try with specific constraints first
+        try {
+          await scanner.start(
+            {
+              facingMode: 'environment',
+              width: { min: 320, ideal: 640, max: 1280 },
+              height: { min: 240, ideal: 480, max: 960 },
+            },
+            {
+              fps: 15,
+              qrbox: { width: 280, height: 280 },
+              aspectRatio: 1.0,
+              disableFlip: false,
+              experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+            },
+            handleDecode,
+            () => {}
+          );
+        } catch (constraintErr) {
+          console.warn('Camera start with strict constraints failed, trying with relaxed constraints:', constraintErr);
+          
+          // Cleanup before retry to avoid state transition conflicts
+          try {
+            await scanner.stop();
+          } catch { /* ignore */ }
+          try {
+            await scanner.clear();
+          } catch { /* ignore */ }
+          
+          // Small delay before retrying
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Create a fresh scanner instance for the retry
+          const retryScanner = new Html5Qrcode(SCANNER_ELEMENT_ID, { verbose: false });
+          html5QrRef.current = retryScanner;
+          
+          // Retry with minimal constraints
+          await retryScanner.start(
+            { facingMode: 'environment' },
+            {
+              fps: 15,
+              qrbox: { width: 280, height: 280 },
+              aspectRatio: 1.0,
+              disableFlip: false,
+            },
+            handleDecode,
+            () => {}
+          );
+        }
       } catch (err) {
         const msg = typeof err === 'string' ? err : (err?.message || '');
+        console.error('Camera start error:', err);
         if (
           err?.name === 'NotAllowedError' ||
           err?.name === 'PermissionDeniedError' ||
@@ -123,7 +162,7 @@ export default function AdminScanQR() {
         } else {
           setErrorMsg('Could not start camera. Please try again.');
           setScanState(STATE.ERROR);
-          setTimeout(() => setScanState(STATE.IDLE), 3500);
+          setTimeout(() => setScanState(STATE.IDLE), 5000);
         }
       }
     }, 150);
@@ -193,26 +232,90 @@ export default function AdminScanQR() {
     setErrorMsg('');
 
     try {
-      const scanner = new Html5Qrcode(UPLOAD_SCANNER_ELEMENT_ID, { verbose: false });
-      const decodedText = await scanner.scanFile(file, false);
-      try { await scanner.clear(); } catch { /* ignore */ }
+      const decodedText = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onerror = () => reject(new Error('Failed to read file'));
+
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('Failed to load image'));
+
+          img.onload = () => {
+            // Draw onto a canvas so we can extract raw pixel data for jsQR
+            const canvas = document.createElement('canvas');
+            canvas.width  = img.naturalWidth  || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const result = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: 'attemptBoth', // handles light-on-dark and dark-on-light QRs
+            });
+
+            if (result?.data) {
+              resolve(result.data);
+            } else {
+              reject(new Error('No QR code found in image'));
+            }
+          };
+
+          img.src = e.target.result;
+        };
+
+        reader.readAsDataURL(file);
+      });
+
       cooldownRef.current = false;
+
+      // Non-critical: upload image to Cloudinary for record-keeping
+      try {
+        const formData = new FormData();
+        formData.append('qrImage', file);
+        const adminToken = getAdminToken();
+        const uploadRes = await fetch(`${API_URL}/admin/upload-qr-image`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${adminToken}` },
+          body: formData,
+        });
+        if (!uploadRes.ok) console.warn('Image upload to Cloudinary failed, but QR scan succeeded');
+      } catch (uploadErr) {
+        console.warn('Image upload error (non-critical):', uploadErr);
+      }
+
       await handleDecode(decodedText);
-    } catch {
+    } catch (err) {
       cooldownRef.current = false;
+      console.error('Upload QR error:', err);
       setErrorMsg('Could not read a QR code from that image. Try a clearer screenshot or photo.');
       setScanState(STATE.ERROR);
-      setTimeout(() => setScanState(STATE.IDLE), 3500);
+      setTimeout(() => setScanState(STATE.IDLE), 5000);
     }
   };
 
   const requestCameraPermission = async () => {
     setScanState(STATE.REQUESTING);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
-      stream.getTracks().forEach(t => t.stop());
+      // Try with specific constraints first
+      try {
+        const constraints = {
+          video: {
+            facingMode: 'environment',
+            width: { min: 320, ideal: 640, max: 1280 },
+            height: { min: 240, ideal: 480, max: 960 },
+          },
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        stream.getTracks().forEach(t => t.stop());
+      } catch (constraintErr) {
+        console.warn('getUserMedia with strict constraints failed, trying without:', constraintErr);
+        // Fallback: try with minimal constraints
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+        });
+        stream.getTracks().forEach(t => t.stop());
+      }
       startScanner();
     } catch (err) {
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
@@ -220,7 +323,7 @@ export default function AdminScanQR() {
       } else {
         setErrorMsg('Could not access camera. Please check your device settings.');
         setScanState(STATE.ERROR);
-        setTimeout(() => setScanState(STATE.IDLE), 3500);
+        setTimeout(() => setScanState(STATE.IDLE), 5000);
       }
     }
   };

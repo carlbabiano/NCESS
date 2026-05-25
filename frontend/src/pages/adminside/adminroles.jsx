@@ -24,25 +24,19 @@ function decodeToken(token) {
 const ROLES = [
   { value: 'barangaycaptain', label: 'Barangay Captain' },
   { value: 'secretary',       label: 'Secretary'         },
-  { value: 'treasurer',       label: 'Treasurer'         },
-  { value: 'barangaytanod',   label: 'Barangay Tanod'    },
-  { value: 'clerk',           label: 'Clerk'             },
+  { value: 'admin',           label: 'Admin'             },
 ];
 
 const ROLE_LABELS = {
   barangaycaptain: 'Barangay Captain',
   secretary:       'Secretary',
-  treasurer:       'Treasurer',
-  barangaytanod:   'Barangay Tanod',
-  clerk:           'Clerk',
+  admin:           'Admin',
 };
 
 const ROLE_AVATARS = {
   barangaycaptain: { bg: '#fef9c3', color: '#854d0e' },
   secretary:       { bg: '#dbeafe', color: '#1e40af' },
-  treasurer:       { bg: '#d1fae5', color: '#065f46' },
-  barangaytanod:   { bg: '#ede9fe', color: '#5b21b6' },
-  clerk:           { bg: '#fce7f3', color: '#9d174d' },
+  admin:           { bg: '#e5e7eb', color: '#374151' },
 };
 
 const ACCOUNT_STATUS_LABELS = {
@@ -139,13 +133,15 @@ function StatusBadge({ status }) {
 function AdminFormModal({ mode, admin, currentAdminId, onClose, onSaved }) {
   const isEdit = mode === 'edit';
   const [form, setForm] = useState({
-    firstName: admin?.firstName || '',
-    lastName:  admin?.lastName  || '',
-    email:     admin?.email     || '',
-    role:      admin?.role      || 'secretary',
-    mobileNo:  admin?.mobileNo  || '',
-    password:  '',
-    reason:    '',
+    firstName:  admin?.firstName  || '',
+    middleName: admin?.middleName || '',
+    lastName:   admin?.lastName   || '',
+    suffix:     admin?.suffix     || '',
+    email:      admin?.email      || '',
+    role:       admin?.role       || 'secretary',
+    mobileNo:   admin?.mobileNo   || '',
+    password:   '',
+    reason:     '',
   });
   const [showPw, setShowPw]   = useState(false);
   const [loading, setLoading] = useState(false);
@@ -167,9 +163,28 @@ function AdminFormModal({ mode, admin, currentAdminId, onClose, onSaved }) {
     setLoading(true);
     try {
       const token = getToken();
-      const body  = isEdit
-        ? { role: form.role, firstName: form.firstName, lastName: form.lastName, mobileNo: form.mobileNo, reason: form.reason }
-        : { email: form.email.trim(), password: form.password, role: form.role, firstName: form.firstName, lastName: form.lastName, mobileNo: form.mobileNo };
+      let body;
+      
+      if (isEdit) {
+        // For edit mode, only include role if it actually changed
+        body = { firstName: form.firstName, middleName: form.middleName, lastName: form.lastName, suffix: form.suffix, mobileNo: form.mobileNo };
+        if (roleChanged) {
+          body.role = form.role;
+          body.reason = form.reason;
+        }
+      } else {
+        // For create mode, always include all fields
+        body = {
+          email:      form.email.trim(),
+          password:   form.password,
+          role:       form.role,
+          firstName:  form.firstName,
+          middleName: form.middleName,
+          lastName:   form.lastName,
+          suffix:     form.suffix,
+          mobileNo:   form.mobileNo,
+        };
+      }
 
       const res = await fetch(
         isEdit ? `${API_URL}/admins/${admin._id}` : `${API_URL}/admins`,
@@ -207,8 +222,27 @@ function AdminFormModal({ mode, admin, currentAdminId, onClose, onSaved }) {
               <input placeholder="Juan" value={form.firstName} onChange={set('firstName')} />
             </div>
             <div className="aroles-field">
+              <label>Middle Name <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+              <input placeholder="Santos" value={form.middleName} onChange={set('middleName')} />
+            </div>
+          </div>
+
+          <div className="aroles-field__row">
+            <div className="aroles-field">
               <label>Last Name</label>
-              <input placeholder="dela Cruz" value={form.lastName} onChange={set('lastName')} />
+              <input placeholder="Dela Cruz" value={form.lastName} onChange={set('lastName')} />
+            </div>
+            <div className="aroles-field">
+              <label>Suffix <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+              <select value={form.suffix} onChange={set('suffix')}>
+                <option value="">None</option>
+                <option value="Jr.">Jr.</option>
+                <option value="Sr.">Sr.</option>
+                <option value="II">II</option>
+                <option value="III">III</option>
+                <option value="IV">IV</option>
+                <option value="V">V</option>
+              </select>
             </div>
           </div>
 
@@ -436,6 +470,82 @@ function DeactivateModal({ admin, onClose, onUpdated }) {
   );
 }
 
+// ── Delete Admin Modal ────────────────────────────────────────────────────────
+function DeleteAdminModal({ admin, onClose, onDeleted }) {
+  const [confirmText, setConfirmText] = useState('');
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState('');
+  const displayName = [admin.firstName, admin.lastName].filter(Boolean).join(' ') || admin.email;
+  const requiredText = displayName;
+
+  const handleConfirm = async () => {
+    setError('');
+    if (confirmText !== requiredText) { setError(`Please type "${requiredText}" exactly to confirm.`); return; }
+    setLoading(true);
+    try {
+      const token = getToken();
+      const res   = await fetch(`${API_URL}/admins/${admin._id}`, {
+        method:  'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || 'Something went wrong.'); return; }
+      onDeleted(admin._id);
+      onClose();
+    } catch {
+      setError('Unable to connect to the server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="aroles-overlay" onClick={onClose}>
+      <div className="aroles-modal" onClick={e => e.stopPropagation()}>
+        <div className="aroles-modal__header">
+          <h2>Delete Account Permanently</h2>
+          <CloseBtn onClick={onClose} />
+        </div>
+        <div className="aroles-confirm__body">
+          <div className="aroles-confirm__icon" style={{ color: '#ef4444' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+            </svg>
+          </div>
+          <p><strong>{displayName}</strong>'s account and all associated data will be permanently deleted. <strong style={{ color: '#ef4444' }}>This action cannot be undone.</strong></p>
+        </div>
+        <div className="aroles-modal__body" style={{ paddingTop: 0 }}>
+          <ModalError msg={error} />
+          <div className="aroles-field">
+            <label>
+              To confirm, type <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>"{requiredText}"</code> below
+              <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>
+            </label>
+            <input
+              type="text"
+              placeholder={requiredText}
+              value={confirmText} onChange={e => setConfirmText(e.target.value)}
+            />
+            <span className="aroles-field__hint">Type the name above to confirm this permanent deletion.</span>
+          </div>
+        </div>
+        <div className="aroles-modal__footer">
+          <button className="aroles-modal__cancel" onClick={onClose}>Cancel</button>
+          <button
+            className="aroles-modal__save"
+            style={{ background: '#ef4444' }}
+            onClick={handleConfirm}
+            disabled={loading || confirmText !== requiredText}
+          >
+            {loading ? <><span className="aroles-spinner" /> Deleting...</> : 'Delete Permanently'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Reactivate Modal (requires current admin's own password) ──────────────────
 function ReactivateModal({ admin, onClose, onUpdated }) {
   const [password, setPassword] = useState('');
@@ -605,12 +715,14 @@ function ProfileDetailModal({ admin, currentId, onClose, onEdit, onResetPw, onDe
 // ── Edit Drawer Panel ─────────────────────────────────────────────────────────
 function EditDrawerPanel({ admin, currentId, onClose, onSaved }) {
   const [form, setForm] = useState({
-    firstName: admin?.firstName || '',
-    lastName:  admin?.lastName  || '',
-    email:     admin?.email     || '',
-    role:      admin?.role      || 'secretary',
-    mobileNo:  admin?.mobileNo  || '',
-    reason:    '',
+    firstName:  admin?.firstName  || '',
+    middleName: admin?.middleName || '',
+    lastName:   admin?.lastName   || '',
+    suffix:     admin?.suffix     || '',
+    email:      admin?.email      || '',
+    role:       admin?.role       || 'secretary',
+    mobileNo:   admin?.mobileNo   || '',
+    reason:     '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
@@ -631,7 +743,7 @@ function EditDrawerPanel({ admin, currentId, onClose, onSaved }) {
       const res = await fetch(`${API_URL}/admins/${admin._id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ role: form.role, firstName: form.firstName, lastName: form.lastName, mobileNo: form.mobileNo, reason: form.reason }),
+        body:    JSON.stringify({ role: form.role, firstName: form.firstName, middleName: form.middleName, lastName: form.lastName, suffix: form.suffix, mobileNo: form.mobileNo, reason: form.reason }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.message || 'Something went wrong.'); return; }
@@ -674,8 +786,27 @@ function EditDrawerPanel({ admin, currentId, onClose, onSaved }) {
               <input placeholder="Juan" value={form.firstName} onChange={set('firstName')} />
             </div>
             <div className="aroles-field">
+              <label>Middle Name <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+              <input placeholder="Santos" value={form.middleName} onChange={set('middleName')} />
+            </div>
+          </div>
+
+          <div className="aroles-drawer__field-group">
+            <div className="aroles-field">
               <label>Last Name</label>
               <input placeholder="dela Cruz" value={form.lastName} onChange={set('lastName')} />
+            </div>
+            <div className="aroles-field">
+              <label>Suffix <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+              <select value={form.suffix} onChange={set('suffix')}>
+                <option value="">None</option>
+                <option value="Jr.">Jr.</option>
+                <option value="Sr.">Sr.</option>
+                <option value="II">II</option>
+                <option value="III">III</option>
+                <option value="IV">IV</option>
+                <option value="V">V</option>
+              </select>
             </div>
           </div>
 
@@ -803,15 +934,16 @@ export default function AdminRoles() {
   const STATUS_TABS = [
     { value: 'active',   label: 'Active'      },
     { value: 'inactive', label: 'Deactivated' },
-    { value: 'all',      label: 'All'         },
   ];
 
   const displayed = admins.filter(a => {
     const name        = `${a.firstName} ${a.lastName} ${a.email}`.toLowerCase();
     const matchSearch = name.includes(search.toLowerCase());
-    const matchRole   = filterRole   === 'All'    || a.role === filterRole;
     const acctStatus  = a.accountStatus || 'active';
-    const matchStatus = filterStatus === 'all'    || acctStatus === filterStatus;
+    // Match role — 'All' shows all roles
+    const matchRole   = filterRole === 'All' || a.role === filterRole;
+    // Match status — filter by selected tab
+    const matchStatus = acctStatus === filterStatus;
     return matchSearch && matchRole && matchStatus;
   });
 
@@ -860,7 +992,7 @@ export default function AdminRoles() {
                   value: filterRole,
                   onChange: setFilterRole,
                   options: [
-                    { value: 'All', label: 'All Roles' },
+                    { value: 'All', label: 'All' },
                     ...ROLES.map(r => ({ value: r.value, label: r.label })),
                   ],
                 },
@@ -871,7 +1003,7 @@ export default function AdminRoles() {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
-                Add Admin
+                Add Roles
               </button>
               )}
             />
@@ -976,19 +1108,33 @@ export default function AdminRoles() {
                                     </button>
                                   )}
                                   {!isSelf && acctStatus !== 'active' && (
-                                    <button
-                                      className="aroles-row__menu-item"
-                                      onClick={() => {
-                                        setModal({ type: 'reactivate', admin: a });
-                                        document.getElementById(`menu-${a._id}`).classList.remove('aroles-row__menu-open');
-                                      }}
-                                    >
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                                        <polyline points="23 4 23 10 17 10"/>
-                                        <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
-                                      </svg>
-                                      Reactivate
-                                    </button>
+                                    <>
+                                      <button
+                                        className="aroles-row__menu-item"
+                                        onClick={() => {
+                                          setModal({ type: 'reactivate', admin: a });
+                                          document.getElementById(`menu-${a._id}`).classList.remove('aroles-row__menu-open');
+                                        }}
+                                      >
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                                          <polyline points="23 4 23 10 17 10"/>
+                                          <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                                        </svg>
+                                        Reactivate
+                                      </button>
+                                      <button
+                                        className="aroles-row__menu-item aroles-row__menu-item--danger"
+                                        onClick={() => {
+                                          setModal({ type: 'delete', admin: a });
+                                          document.getElementById(`menu-${a._id}`).classList.remove('aroles-row__menu-open');
+                                        }}
+                                      >
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                                        </svg>
+                                        Delete Permanently
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -1046,6 +1192,13 @@ export default function AdminRoles() {
           admin={modal.admin}
           onClose={() => setModal(null)}
           onUpdated={handleStatusUpdated}
+        />
+      )}
+      {modal?.type === 'delete' && (
+        <DeleteAdminModal
+          admin={modal.admin}
+          onClose={() => setModal(null)}
+          onDeleted={(adminId) => { setAdmins(prev => prev.filter(a => a._id !== adminId)); showToast('Admin account deleted permanently.'); }}
         />
       )}
 

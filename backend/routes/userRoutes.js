@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema({
   email:         { type: String, required: true, unique: true },
   password:      { type: String, required: true },
   status:        { type: String, enum: ['pending', 'approved', 'denied'], default: 'pending' },
+  denialReason:  { type: String, default: '' }, // Reason for denial provided by admin
   firstName:     { type: String, default: '' },
   middleName:    { type: String, default: '' },
   lastName:      { type: String, default: '' },
@@ -186,6 +187,38 @@ router.post("/usersignup/upload-document", (req, res, next) => {
   }
 });
 
+// ── Check Email Availability (Step 1 — Account Setup) ────────────────────────
+// Only checks whether the email is already taken. Does NOT create any account.
+// A denied account's email is considered available (re-registration is allowed).
+router.post("/usersignup/check-email", async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || !String(email).trim())
+    return res.status(400).json({ message: "Email is required." });
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(String(email).trim()))
+    return res.status(400).json({ message: "Please enter a valid email address." });
+
+  try {
+    const existing = await User.findOne({ email: String(email).trim().toLowerCase() });
+
+    // No account found — email is free to use
+    if (!existing)
+      return res.status(200).json({ available: true, message: "Email is available." });
+
+    // Denied accounts may re-register with the same email
+    if (existing.status === 'denied')
+      return res.status(200).json({ available: true, message: "Email is available." });
+
+    // Pending or approved — already taken
+    return res.status(409).json({ message: "An account with this email already exists." });
+  } catch (error) {
+    console.error("Check-email error:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+});
+
 // ── Signup ───────────────────────────────────────────────────────────────────
 router.post("/usersignup", async (req, res) => {
   const {
@@ -217,6 +250,7 @@ router.post("/usersignup", async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         existingUser.password      = hashedPassword;
         existingUser.status        = 'pending';
+        existingUser.denialReason  = ''; // Clear previous denial reason
         existingUser.firstName     = firstName     || '';
         existingUser.middleName    = middleName    || '';
         existingUser.lastName      = lastName      || '';
@@ -312,8 +346,16 @@ router.post("/userlogin", async (req, res) => {
 
     if (user.status === 'pending')
       return res.status(403).json({ status: 'pending', message: 'Your account is still awaiting approval by the barangay office.' });
-    if (user.status === 'denied')
-      return res.status(403).json({ status: 'denied', message: 'Your registration was not approved. Please contact the barangay office.' });
+    if (user.status === 'denied') {
+      const denialMsg = user.denialReason 
+        ? `Your registration was not approved. Reason: ${user.denialReason}`
+        : 'Your registration was not approved. Please contact the barangay office or try signing up again.';
+      return res.status(403).json({ 
+        status: 'denied', 
+        message: denialMsg,
+        denialReason: user.denialReason
+      });
+    }
 
     const token = jwt.sign(
       { id: user._id, email: user.email, fullName: `${user.firstName} ${user.lastName}`.trim() },
@@ -559,7 +601,7 @@ router.get("/admin/me", requireAdmin, async (req, res) => {
 });
 
 router.patch("/users/:id/status", requireAdmin, async (req, res) => {
-  const { status } = req.body;
+  const { status, denialReason } = req.body;
   if (!['approved', 'denied'].includes(status))
     return res.status(400).json({ message: "Invalid status value" });
 
@@ -572,6 +614,14 @@ router.patch("/users/:id/status", requireAdmin, async (req, res) => {
 
     const previousStatus = user.status;
     user.status = status;
+    
+    // Store denial reason when denying
+    if (status === 'denied') {
+      user.denialReason = denialReason || '';
+    } else if (status === 'approved') {
+      user.denialReason = ''; // Clear denial reason when approving
+    }
+    
     await user.save();
 
     const safeObj = user.toObject();
@@ -610,7 +660,7 @@ router.post("/admins", requireAdmin, requireSuperAdmin, async (req, res) => {
   if (!email || !password || !role)
     return res.status(400).json({ message: "Email, password, and role are required." });
 
-  const validRoles = ['barangaycaptain', 'secretary', 'treasurer', 'barangaytanod', 'clerk'];
+  const validRoles = ['barangaycaptain', 'secretary', 'admin'];
   if (!validRoles.includes(role))
     return res.status(400).json({ message: "Invalid role." });
 
@@ -657,17 +707,17 @@ router.post("/admins", requireAdmin, requireSuperAdmin, async (req, res) => {
 router.patch("/admins/:id", requireAdmin, requireSuperAdmin, async (req, res) => {
   const { role, firstName, lastName, mobileNo, reason } = req.body;
 
-  // Prevent self-role change
-  if (String(req.params.id) === String(req.admin.id) && role)
-    return res.status(400).json({ message: "You cannot change your own role." });
-
-  const validRoles = ['barangaycaptain', 'secretary', 'treasurer', 'barangaytanod', 'clerk'];
+  const validRoles = ['barangaycaptain', 'secretary', 'admin'];
   if (role && !validRoles.includes(role))
     return res.status(400).json({ message: "Invalid role." });
 
   try {
     const admin = await Admin.findById(req.params.id);
     if (!admin) return res.status(404).json({ message: "Admin not found." });
+
+    // Prevent self-role change only if role is actually different
+    if (String(req.params.id) === String(req.admin.id) && role && role !== admin.role)
+      return res.status(400).json({ message: "You cannot change your own role." });
 
     const prevRole      = admin.role;
     const prevFirstName = admin.firstName;
@@ -773,9 +823,34 @@ router.patch("/admins/:id/status", requireAdmin, requireSuperAdmin, async (req, 
   }
 });
 
-// NOTE: Hard-delete has been removed. Use PATCH /admins/:id/status with accountStatus='inactive'
-// to deactivate an account, which moves it to the deactivated area and can be reactivated.
+// DELETE /admins/:id — permanently delete an admin account
+router.delete("/admins/:id", requireAdmin, requireSuperAdmin, async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.params.id);
+    if (!admin)
+      return res.status(404).json({ message: "Admin not found." });
 
+    // Prevent deleting yourself
+    if (String(req.params.id) === String(req.admin.id))
+      return res.status(400).json({ message: "You cannot delete your own account." });
+
+    const adminName = [admin.firstName, admin.lastName].filter(Boolean).join(' ') || admin.email;
+
+    await Admin.findByIdAndDelete(req.params.id);
+
+    await writeAuditLog({
+      performer: req.admin,
+      target:    admin,
+      action:    'DELETE_ADMIN',
+      details:   { deletedAdmin: adminName },
+    });
+
+    res.status(200).json({ message: `Admin account "${adminName}" has been permanently deleted.` });
+  } catch (error) {
+    console.error("Delete admin error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 // ── GET /audit-logs — view admin action history ──────────────────────────────
 router.get("/audit-logs", requireAdmin, requireSuperAdmin, async (req, res) => {
@@ -1056,6 +1131,41 @@ router.get("/user/verify-qr/:token", requireAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Invalid QR code.' });
     console.error('Verify QR error:', err);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// ── QR Image Upload to Cloudinary (Admin) ───────────────────────────────────
+const getQRImageUpload = () => {
+  const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: 'ebrgy/qr_scans',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif'],
+    },
+  });
+  return multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
+};
+
+router.post("/admin/upload-qr-image", requireAdmin, (req, res, next) => {
+  getQRImageUpload().single("qrImage")(req, res, next);
+}, (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image provided" });
+    }
+
+    const imageUrl = req.file.secure_url || req.file.url || 
+      `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/${req.file.filename}`;
+
+    console.log("QR image uploaded:", { filename: req.file.filename, url: imageUrl });
+    res.status(200).json({ 
+      message: "QR image uploaded successfully",
+      url: imageUrl,
+      filename: req.file.filename,
+    });
+  } catch (error) {
+    console.error("QR image upload error:", error);
+    res.status(500).json({ message: "Failed to upload QR image", error: error.message });
   }
 });
 

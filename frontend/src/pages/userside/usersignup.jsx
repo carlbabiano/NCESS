@@ -11,6 +11,7 @@ const SEX          = ['Male', 'Female'];
 const PUROKS       = ['Purok 1', 'Purok 2', 'Purok 3', 'Purok 4', 'Purok 5', 'Purok 6', 'Purok 7', 'Iram'];
 
 const STEPS = ['Personal Info', 'Account Setup', 'Information Verification'];
+const SUFFIXES = ['Jr', 'Sr', 'I', 'II', 'III', 'IV', 'V'];
 
 // ── SVG helpers ──────────────────────────────────────────────────────────────
 const ChevronR = () => (
@@ -38,6 +39,7 @@ export default function UserSignup() {
   const [firstName,   setFirstName]   = useState('');
   const [middleName,  setMiddleName]  = useState('');
   const [lastName,    setLastName]    = useState('');
+  const [suffix,      setSuffix]      = useState('');
   const [bday,        setBday]        = useState('');
   const [bdayDisplay, setBdayDisplay] = useState('');
 
@@ -85,8 +87,6 @@ export default function UserSignup() {
   // ── Step 2 — Information Verification ─────────────────────────────────────
   const [validIdFile, setValidIdFile] = useState(null);
   const [validIdPreview, setValidIdPreview] = useState('');
-  const [proofOfResidencyFile, setProofOfResidencyFile] = useState(null);
-  const [proofOfResidencyPreview, setProofOfResidencyPreview] = useState('');
 
   const [errors, setErrors] = useState({});
 
@@ -124,7 +124,10 @@ export default function UserSignup() {
     }
     if (step === 2) {
       if (!validIdFile) e.validIdFile = 'Valid ID is required.';
-      if (!proofOfResidencyFile) e.proofOfResidencyFile = 'Proof of Residency is required.';
+    }
+    if (step === 3) {
+      // Summary step, just validating data exists
+      if (!validIdFile) e.validIdFile = 'Valid ID is required.';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -133,35 +136,24 @@ export default function UserSignup() {
   const next = () => { if (validate()) setStep(s => s + 1); };
   const back = () => { setErrors({}); setStep(s => s - 1); };
 
-  // ── Step 1 Continue — validate + submit registration, then advance to verification ──
+  // ── Step 2 Continue — check email availability only ──
   const handleStep1Continue = async () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/usersignup`, {
+      const res = await fetch(`${API_URL}/usersignup/check-email`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          password,
-          firstName,
-          middleName,
-          lastName,
-          birthdate:     bday,
-          sex,
-          contactNumber: contact,
-          homeAddress,
-          purok,
-        }),
+        body: JSON.stringify({ email }),
       });
       const data = await res.json();
       if (res.ok) {
-        // Registration succeeded — advance to information verification step
+        // Email is available — advance to document verification step
         setErrors({});
         setStep(2);
       } else {
-        // Show the server error (e.g. "An account with this email already exists.") inline on step 1
-        setErrors({ submit: data.message || 'Registration failed. Please try again.' });
+        // Show the server error (e.g. "An account with this email already exists.")
+        setErrors({ submit: data.message || 'Email check failed. Please try again.' });
       }
     } catch {
       setErrors({ submit: 'Unable to connect to the server. Please try again.' });
@@ -170,24 +162,29 @@ export default function UserSignup() {
     }
   };
 
-  // ── Form submission ────────────────────────────────────────────────────────
-  const handleSubmit = (e) => {
-    if (step === 2) {
-      handleStep2Submit(e);
-    } else {
-      e.preventDefault();
+  // ── Step 3 Continue — validate documents and show summary ──
+  const handleStep2Continue = () => {
+    if (validate()) {
+      setErrors({});
+      setStep(3);
     }
   };
 
-  // ── Step 2 Submit — upload documents through backend to Cloudinary ────────
-  const handleStep2Submit = async (e) => {
+  // ── Form submission ────────────────────────────────────────────────────────
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (step === 3) {
+      handleStep3Submit(e);
+    }
+  };
+
+  // ── Step 4 Submit — register user + upload documents through backend to Cloudinary ────────
+  const handleStep3Submit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
     setLoading(true);
     try {
-      console.log("[Signup Step 2] Starting document upload", { hasValidIdFile: !!validIdFile, hasProofFile: !!proofOfResidencyFile });
-      
       // Upload Valid ID through backend
       const validIdFormData = new FormData();
       validIdFormData.append('file', validIdFile);
@@ -197,39 +194,37 @@ export default function UserSignup() {
         body: validIdFormData,
       });
       const validIdData = await validIdRes.json();
-      console.log("[Signup Step 2] Valid ID upload response:", { ok: validIdRes.ok, url: validIdData.url?.substring(0, 80) });
+      console.log("[Signup] Valid ID upload response:", { ok: validIdRes.ok, url: validIdData.url?.substring(0, 80) });
       if (!validIdRes.ok) throw new Error('Valid ID upload failed');
 
-      // Upload Proof of Residency through backend
-      const proofFormData = new FormData();
-      proofFormData.append('file', proofOfResidencyFile);
-
-      const proofRes = await fetch(`${API_URL}/usersignup/upload-document`, {
-        method: 'POST',
-        body: proofFormData,
-      });
-      const proofData = await proofRes.json();
-      console.log("[Signup Step 2] Proof of Residency upload response:", { ok: proofRes.ok, url: proofData.url?.substring(0, 80) });
-      if (!proofRes.ok) throw new Error('Proof of Residency upload failed');
-
-      // Store document URLs with user account
-      console.log("[Signup Step 2] Saving documents to user account", { email, hasValidId: !!validIdData.url, hasProof: !!proofData.url });
-      const docsRes = await fetch(`${API_URL}/usersignup/documents/${email}`, {
-        method: 'POST',
+      // Register user with all information
+      const registerRes = await fetch(`${API_URL}/usersignup`, {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          email,
+          password,
+          firstName,
+          middleName,
+          lastName,
+          suffix,
+          birthdate:     bday,
+          sex,
+          contactNumber: contact,
+          homeAddress,
+          purok,
           validId: validIdData.url,
-          proofOfResidency: proofData.url,
         }),
       });
-      const docsData = await docsRes.json();
-      console.log("[Signup Step 2] Documents saved response:", { ok: docsRes.ok, user: docsData.user });
+      const registerData = await registerRes.json();
+      console.log("[Signup] Registration response:", { ok: registerRes.ok });
+      if (!registerRes.ok) throw new Error(registerData.message || 'Registration failed');
 
       // Mark registration as complete
       setDone(true);
     } catch (err) {
-      console.error('Document upload error:', err);
-      setErrors({ submit: 'Failed to upload documents. Please try again.' });
+      console.error('Registration error:', err);
+      setErrors({ submit: err.message || 'Failed to complete registration. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -247,16 +242,21 @@ export default function UserSignup() {
     }
   };
 
-  const handleProofOfResidencyChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setProofOfResidencyFile(file);
-      const reader = new FileReader();
-      reader.onload = (event) => setProofOfResidencyPreview(event.target?.result || '');
-      reader.readAsDataURL(file);
-      setErrors(prev => ({ ...prev, proofOfResidencyFile: '' }));
-    }
-  };
+
+  // ── Eye toggle ────────────────────────────────────────────────────────────
+  const EyeOpen = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+  const EyeOff = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
 
   // ── Done screen ───────────────────────────────────────────────────────────
   if (done) return (
@@ -275,22 +275,126 @@ export default function UserSignup() {
     </div>
   );
 
-  // ── Eye toggle ────────────────────────────────────────────────────────────
-  const EyeOpen = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-      <circle cx="12" cy="12" r="3"/>
-    </svg>
-  );
-  const EyeOff = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
-      <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
-    </svg>
-  );
-
   return (
+    <>
+      {/* Floating Summary Panel */}
+      {step === 3 && (
+        <div className="su-summary-overlay">
+          <div className="su-summary-panel">
+            <p style={{ fontSize: 15, fontWeight: 700, color: '#1f2937', marginBottom: 24, textAlign: 'center' }}>
+              Review and Confirm Your Information
+            </p>
+
+            {/* Personal Info Section */}
+            <div style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #e5e7eb' }}>
+              <h3 style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Personal Information</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>First Name</label>
+                  <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Middle Name</label>
+                  <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Last Name</label>
+                  <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Suffix</label>
+                  <input type="text" value={suffix} onChange={e => setSuffix(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Date of Birth</label>
+                  <input type="text" value={bdayDisplay} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Sex</label>
+                  <input type="text" value={sex} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Contact Number</label>
+                  <input type="text" value={contact} onChange={e => setContact(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Purok</label>
+                  <input type="text" value={purok} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                </div>
+              </div>
+              <div style={{ marginTop: 16 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Home Address</label>
+                <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+              </div>
+            </div>
+
+            {/* Account Setup Section */}
+            <div style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #e5e7eb' }}>
+              <h3 style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Account Information</h3>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Email Address</label>
+                <input type="email" value={email} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+              </div>
+            </div>
+
+            {/* Information Verification Section */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Document Upload</h3>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Valid ID</label>
+                <div style={{ padding: 12, backgroundColor: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+                  <p style={{ margin: 0, fontSize: 13, color: '#1f2937', fontWeight: 500 }}>
+                    {validIdFile ? `✓ ${validIdFile.name}` : 'No file selected'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Panel Navigation */}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                onClick={back}
+                disabled={loading}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: '#f3f4f6',
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#374151',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.5 : 1
+                }}
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  backgroundColor: '#2563eb',
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'white',
+                  border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1
+                }}
+              >
+                {loading ? 'Submitting...' : 'Submit Registration'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="su-root">
 
       {/* ── Left — Decorative ── */}
@@ -377,17 +481,20 @@ export default function UserSignup() {
 
           {/* Step indicators */}
           <div className="su-steps">
-            {STEPS.map((label, i) => (
-              <div key={label} className={`su-step${i === step ? ' su-step--active' : i < step ? ' su-step--done' : ''}`}>
-                <div className="su-step__circle">
-                  {i < step ? <CheckIcon/> : <span>{i + 1}</span>}
+            {STEPS.map((label, i) => {
+              const displayStep = Math.min(step, STEPS.length - 1);
+              return (
+                <div key={label} className={`su-step${i === displayStep ? ' su-step--active' : i < displayStep ? ' su-step--done' : ''}`}>
+                  <div className="su-step__circle">
+                    {i < displayStep ? <CheckIcon/> : <span>{i + 1}</span>}
+                  </div>
+                  <span className="su-step__label">{label}</span>
+                  {i < STEPS.length - 1 && (
+                    <div className={`su-step__line${i < displayStep ? ' su-step__line--done' : ''}`}/>
+                  )}
                 </div>
-                <span className="su-step__label">{label}</span>
-                {i < STEPS.length - 1 && (
-                  <div className={`su-step__line${i < step ? ' su-step__line--done' : ''}`}/>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <form className="su-form" onSubmit={handleSubmit} noValidate>
@@ -402,7 +509,7 @@ export default function UserSignup() {
                 <div className="su-row-2 su-row-align">
                   <div className="su-field">
                     <label>First Name</label>
-                    <input type="text" placeholder="Maria" value={firstName} onChange={e => setFirstName(e.target.value)} className={errors.firstName ? 'su-input--error' : ''}/>
+                    <input type="text" placeholder="Juan" value={firstName} onChange={e => setFirstName(e.target.value)} className={errors.firstName ? 'su-input--error' : ''}/>
                     {errors.firstName && <p className="su-field-error">{errors.firstName}</p>}
                   </div>
                   <div className="su-field su-field-middle">
@@ -410,12 +517,19 @@ export default function UserSignup() {
                     <input type="text" placeholder="Santos" value={middleName} onChange={e => setMiddleName(e.target.value)}/>
                   </div>
                 </div>
-                {/* Row: Last Name left-aligned below */}
-                <div className="su-row-left">
+                {/* Row: Last Name / Suffix */}
+                <div className="su-row-2">
                   <div className="su-field">
                     <label>Last Name</label>
                     <input type="text" placeholder="Dela Cruz" value={lastName} onChange={e => setLastName(e.target.value)} className={errors.lastName ? 'su-input--error' : ''}/>
                     {errors.lastName && <p className="su-field-error">{errors.lastName}</p>}
+                  </div>
+                  <div className="su-field">
+                    <label>Suffix <span className="su-optional">(optional)</span></label>
+                    <select value={suffix} onChange={e => setSuffix(e.target.value)}>
+                      <option value="">None</option>
+                      {SUFFIXES.map(s => <option key={s}>{s}</option>)}
+                    </select>
                   </div>
                 </div>
 
@@ -639,57 +753,7 @@ export default function UserSignup() {
                   {errors.validIdFile && <p className="su-field-error">{errors.validIdFile}</p>}
                 </div>
 
-                {/* Proof of Residency Upload */}
-                <div className="su-field">
-                  <label>Proof of Residency <span style={{ color: '#dc2626' }}>*</span></label>
-                  <p style={{ fontSize: 12, color: '#666', margin: '4px 0 8px' }}>
-                    Upload a clear photo/scan of utility bill, ID with address, or barangay certificate
-                  </p>
-                  <div className="su-file-upload">
-                    <input
-                      type="file"
-                      id="proofOfResidency"
-                      accept="image/*,.pdf"
-                      onChange={handleProofOfResidencyChange}
-                      style={{ display: 'none' }}
-                      disabled={loading}
-                    />
-                    {!proofOfResidencyPreview ? (
-                      <label htmlFor="proofOfResidency" className="su-file-label" style={{ cursor: loading ? 'not-allowed' : 'pointer' }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 32, height: 32, marginBottom: 8 }}>
-                          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        <p style={{ margin: 0, fontWeight: 600, color: '#2563eb' }}>Click to upload</p>
-                        <p style={{ margin: 0, fontSize: 12, color: '#666' }}>or drag and drop</p>
-                        <p style={{ margin: 0, fontSize: 11, color: '#999', marginTop: 4 }}>PNG, JPG, GIF or PDF (Max. 5MB)</p>
-                      </label>
-                    ) : (
-                      <div className="su-file-preview">
-                        {proofOfResidencyFile?.type.startsWith('image/') ? (
-                          <img src={proofOfResidencyPreview} alt="Proof of Residency" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8 }}/>
-                        ) : (
-                          <div style={{ padding: 16, textAlign: 'center' }}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" style={{ width: 32, height: 32, margin: '0 auto 8px' }}>
-                              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                            </svg>
-                            <p style={{ margin: 0, fontSize: 12, color: '#2563eb', fontWeight: 600 }}>{proofOfResidencyFile?.name}</p>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setProofOfResidencyFile(null);
-                            setProofOfResidencyPreview('');
-                          }}
-                          style={{ marginTop: 8, padding: '4px 12px', fontSize: 12, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: 4 }}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {errors.proofOfResidencyFile && <p className="su-field-error">{errors.proofOfResidencyFile}</p>}
-                </div>
+
 
                 <div className="su-info-box" style={{ flexDirection: 'column', gap: 12, marginTop: 16 }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -716,6 +780,11 @@ export default function UserSignup() {
               </div>
             )}
 
+            {/* ══════════════════════════════════════
+                Step 3 — Information Summary (Floating Panel)
+            ══════════════════════════════════════ */}
+            {/* Displayed as floating modal above */}
+
             {/* Server/submit error */}
             {errors.submit && (
               <div className="su-submit-error">
@@ -728,49 +797,44 @@ export default function UserSignup() {
               </div>
             )}
 
-            {/* Navigation */}
-            <div className="su-nav">
-              {step > 0 && step < 2 && (
-                <button type="button" className="su-back-btn" onClick={back} disabled={loading}>
-                  <ChevronL/> Back
-                </button>
-              )}
-              {step === 2 && (
-                <button type="button" className="su-back-btn" onClick={back} disabled={loading}>
-                  <ChevronL/> Back
-                </button>
-              )}
-              {step === 0 && (
-                <button type="button" className="su-next-btn" onClick={next}>
-                  Continue <ChevronR/>
-                </button>
-              )}
-              {step === 1 && (
-                <button
-                  type="button"
-                  className={`su-next-btn${loading ? ' su-next-btn--loading' : ''}`}
-                  disabled={loading}
-                  onClick={handleStep1Continue}
-                >
-                  {loading
-                    ? <><span className="su-spinner"/>Checking…</>
-                    : <>Continue <ChevronR/></>
-                  }
-                </button>
-              )}
-              {step === 2 && (
-                <button
-                  type="submit"
-                  className={`su-next-btn${loading ? ' su-next-btn--loading' : ''}`}
-                  disabled={loading}
-                >
-                  {loading
-                    ? <><span className="su-spinner"/>Uploading…</>
-                    : <>Submit Documents <ChevronR/></>
-                  }
-                </button>
-              )}
-            </div>
+            {/* Navigation — hidden on step 3 (floating panel has its own nav) */}
+            {step < 3 && (
+              <div className="su-nav">
+                {step > 0 && (
+                  <button type="button" className="su-back-btn" onClick={back} disabled={loading}>
+                    <ChevronL/> Back
+                  </button>
+                )}
+                {step === 0 && (
+                  <button type="button" className="su-next-btn" onClick={next}>
+                    Continue <ChevronR/>
+                  </button>
+                )}
+                {step === 1 && (
+                  <button
+                    type="button"
+                    className={`su-next-btn${loading ? ' su-next-btn--loading' : ''}`}
+                    disabled={loading}
+                    onClick={handleStep1Continue}
+                  >
+                    {loading
+                      ? <><span className="su-spinner"/>Checking…</>
+                      : <>Continue <ChevronR/></>
+                    }
+                  </button>
+                )}
+                {step === 2 && (
+                  <button
+                    type="button"
+                    className={`su-next-btn${loading ? ' su-next-btn--loading' : ''}`}
+                    disabled={loading}
+                    onClick={handleStep2Continue}
+                  >
+                    Continue <ChevronR/>
+                  </button>
+                )}
+              </div>
+            )}
           </form>
 
           <p className="su-login-link">
@@ -780,5 +844,6 @@ export default function UserSignup() {
         </div>
       </div>
     </div>
+    </>
   );
 }

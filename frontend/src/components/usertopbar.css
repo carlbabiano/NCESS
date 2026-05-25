@@ -1081,6 +1081,31 @@ select.utb-field-input {
   max-width: 280px;
 }
 
+.utb-qr-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 20px;
+  border-radius: 10px;
+  border: 1.5px solid #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.utb-qr-download-btn:hover {
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(37,99,235,0.25);
+}
+.utb-qr-download-btn svg {
+  flex-shrink: 0;
+  transition: stroke 0.15s;
+}
+
 @keyframes utbSpin {
   to { transform: rotate(360deg); }
 }

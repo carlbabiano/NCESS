@@ -559,6 +559,7 @@ export default function UserTopbar({
   const [qrLoading,     setQrLoading]     = useState(false);
   const [qrError,       setQrError]       = useState('');
   const [qrPanelOpen,   setQrPanelOpen]   = useState(false);
+  const qrRef = useRef(null);
   const panelRef = useRef(null);
   const bellRef  = useRef(null);
   const isLast   = activeSection === SECTIONS.length - 1;
@@ -988,6 +989,34 @@ export default function UserTopbar({
     setQrPanelOpen(false);
     setQrToken('');
     setQrError('');
+  }
+
+  function downloadQr() {
+    const svgEl = qrRef.current?.querySelector('svg');
+    if (!svgEl) return;
+
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const padding = 24;
+      const size = img.width + padding * 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, padding, padding, img.width, img.height);
+      URL.revokeObjectURL(url);
+      const link = document.createElement('a');
+      const safeName = fullName.replace(/\s+/g, '_') || 'resident';
+      link.download = `QR_${safeName}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+    img.src = url;
   }
 
   function toggleBellPanel() {
@@ -1809,7 +1838,7 @@ export default function UserTopbar({
                 <div className="utb-qr-sub">Barangay New Cabalan Resident</div>
               </div>
 
-              <div className="utb-qr-code-wrap">
+              <div className="utb-qr-code-wrap" ref={qrRef}>
                 {qrLoading ? (
                   <div className="utb-qr-spinner-wrap">
                     <span className="utb-qr-spinner"/>
@@ -1836,6 +1865,17 @@ export default function UserTopbar({
                   </div>
                 )}
               </div>
+
+              {qrToken && !qrLoading && (
+                <button className="utb-qr-download-btn" onClick={downloadQr} type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Download QR Code
+                </button>
+              )}
 
               <p className="utb-qr-hint">
                 Show this QR code to the barangay admin for identity verification.

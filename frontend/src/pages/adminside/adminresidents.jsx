@@ -494,6 +494,142 @@ function DocumentsModal({ resident, onClose }) {
   );
 }
 
+// ── Denial Reason Modal ───────────────────────────────────────────────────────
+function DenialReasonModal({ resident, isOpen, onClose, onConfirm, isLoading }) {
+  const [reason, setReason] = useState('');
+
+  if (!isOpen || !resident) return null;
+
+  const handleConfirm = () => {
+    onConfirm(resident._id, reason);
+    setReason('');
+  };
+
+  return (
+    <div 
+      className="utb-modal-overlay" 
+      onClick={(e) => { if (e.target === e.currentTarget && !isLoading) onClose(); }}
+      style={{ zIndex: 2000 }}
+    >
+      <div 
+        className="utb-modal" 
+        role="dialog" 
+        aria-modal="true" 
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: '500px', display: 'flex', flexDirection: 'column' }}
+      >
+        <div className="utb-modal-header">
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#111' }}>
+              Deny Registration
+            </h2>
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: '#666' }}>
+              {resident.name}
+            </p>
+          </div>
+          <button 
+            className="utb-modal-close" 
+            onClick={onClose} 
+            aria-label="Close"
+            disabled={isLoading}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div style={{ padding: '24px', borderTop: '1px solid #e5e7eb', flex: 1, overflowY: 'auto' }}>
+          <label style={{
+            display: 'block',
+            fontSize: 13,
+            fontWeight: 500,
+            marginBottom: 8,
+            color: '#374151',
+          }}>
+            Reason for Denial (Optional)
+          </label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            disabled={isLoading}
+            placeholder="Message..."
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: 6,
+              border: '1px solid #d1d5db',
+              fontFamily: 'DM Sans, sans-serif',
+              fontSize: 13,
+              minHeight: '120px',
+              resize: 'vertical',
+              color: '#111',
+              backgroundColor: isLoading ? '#f9fafb' : '#fff',
+              cursor: isLoading ? 'not-allowed' : 'text',
+              transition: 'all 0.2s ease',
+            }}
+            onFocus={(e) => !isLoading && (e.target.style.borderColor = '#2563eb')}
+            onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
+          />
+          
+        </div>
+
+        <div style={{
+          padding: '16px 24px',
+          borderTop: '1px solid #e5e7eb',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 12,
+          flexShrink: 0,
+        }}>
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 6,
+              border: '1px solid #d1d5db',
+              background: '#fff',
+              color: '#374151',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              fontFamily: 'DM Sans, sans-serif',
+              transition: 'all 0.2s ease',
+              opacity: isLoading ? 0.6 : 1,
+            }}
+            onMouseEnter={(e) => !isLoading && (e.currentTarget.style.background = '#f3f4f6')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isLoading}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 6,
+              border: 'none',
+              background: '#dc2626',
+              color: '#fff',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              fontFamily: 'DM Sans, sans-serif',
+              transition: 'all 0.2s ease',
+              opacity: isLoading ? 0.7 : 1,
+            }}
+            onMouseEnter={(e) => !isLoading && (e.currentTarget.style.background = '#b91c1c')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = '#dc2626')}
+          >
+            {isLoading ? 'Denying...' : 'Confirm Denial'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
@@ -502,7 +638,7 @@ function formatDate(dateStr) {
 }
 
 // ── Tabbed Profile Modal ───────────────────────────────────────────────────────
-function ProfileModal({ resident, onClose, onApprove, onReject, actionLoading }) {
+function ProfileModal({ resident, onClose, onApprove, onRejectClick, actionLoading }) {
   const [activeSection, setActiveSection] = useState(0);
   if (!resident) return null;
 
@@ -662,7 +798,7 @@ function ProfileModal({ resident, onClose, onApprove, onReject, actionLoading })
               {isLast && resident.status === 'pending' && (
                 <>
                   <button
-                    onClick={() => onReject(resident._id)}
+                    onClick={() => onRejectClick(resident._id)}
                     disabled={!!actionLoading}
                     style={{
                       display:'flex', alignItems:'center', gap:6,
@@ -697,7 +833,7 @@ function ProfileModal({ resident, onClose, onApprove, onReject, actionLoading })
 
               {isLast && resident.status === 'approved' && (
                 <button
-                  onClick={() => onReject(resident._id)}
+                  onClick={() => onRejectClick(resident._id)}
                   disabled={!!actionLoading}
                   style={{
                     display:'flex', alignItems:'center', gap:6,
@@ -762,6 +898,8 @@ export default function AdminResidents({ initialTab = 'All' }) {
   const [viewDocumentsResident, setViewDocumentsResident] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [toast,        setToast]        = useState('');
+  const [denialModalOpen, setDenialModalOpen] = useState(false);
+  const [pendingDenialId, setPendingDenialId] = useState(null);
 
   // ── Fetch all users from the backend ────────────────────────────────────
   const fetchResidents = useCallback(async () => {
@@ -849,14 +987,18 @@ export default function AdminResidents({ initialTab = 'All' }) {
   }, [initialTab]);
 
   // ── Approve / Reject ─────────────────────────────────────────────────────
-  async function updateStatus(id, newStatus) {
+  async function updateStatus(id, newStatus, denialReason = '') {
     setActionLoading(newStatus);
     try {
       const token = getAdminToken();
+      const body = { status: newStatus };
+      if (newStatus === 'denied' && denialReason) {
+        body.denialReason = denialReason;
+      }
       const res = await fetch(`${API_URL}/users/${id}/status`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ status: newStatus }),
+        body:    JSON.stringify(body),
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -875,6 +1017,16 @@ export default function AdminResidents({ initialTab = 'All' }) {
     } finally {
       setActionLoading(null);
     }
+  }
+
+  function handleDenyClick(residentId) {
+    setPendingDenialId(residentId);
+    setDenialModalOpen(true);
+  }
+
+  async function handleConfirmDeny(residentId, reason) {
+    setDenialModalOpen(false);
+    await updateStatus(residentId, 'denied', reason);
   }
 
   function showToast(msg) {
@@ -953,25 +1105,8 @@ export default function AdminResidents({ initialTab = 'All' }) {
           {/* Table Card */}
           <div className="res-card" onClick={e => e.stopPropagation()}>
 
-            <AdminFilterBar
-              selects={[{
-                label: 'Purok',
-                value: purokFilter,
-                onChange: handlePurok,
-                options: puroks,
-              }]}
-              count={`Showing ${filtered.length} residents`}
-              actions={(
-                <button className="res-export-btn" onClick={fetchResidents} disabled={loading}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="23 4 23 10 17 10"/>
-                    <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
-                  </svg>
-                  {loading ? 'Loadingâ€¦' : 'Refresh'}
-                </button>
-              )}
-            />
-                        {/* Loading / Error states */}
+            
+          {/* Loading / Error states */}
             {loading && (
               <div className="res-table__empty">
                 <span style={{ display:'inline-flex', alignItems:'center', gap:8 }}>
@@ -1088,7 +1223,7 @@ export default function AdminResidents({ initialTab = 'All' }) {
                                 {r.status !== 'denied' && (
                                   <button
                                     className="res-dropdown__item res-dropdown__item--danger"
-                                    onClick={() => { updateStatus(r._id, 'denied'); setOpenMenu(null); }}
+                                    onClick={() => { handleDenyClick(r._id); setOpenMenu(null); }}
                                   >
                                     Deny
                                   </button>
@@ -1145,10 +1280,22 @@ export default function AdminResidents({ initialTab = 'All' }) {
           resident={viewResident}
           onClose={() => setViewResident(null)}
           onApprove={id => updateStatus(id, 'approved')}
-          onReject={id  => updateStatus(id, 'denied')}
+          onRejectClick={id => handleDenyClick(id)}
           actionLoading={actionLoading}
         />
       )}
+
+      {/* ── Denial Reason Modal ── */}
+      <DenialReasonModal
+        resident={residents.find(r => r._id === pendingDenialId)}
+        isOpen={denialModalOpen}
+        onClose={() => {
+          setDenialModalOpen(false);
+          setPendingDenialId(null);
+        }}
+        onConfirm={handleConfirmDeny}
+        isLoading={actionLoading === 'denied'}
+      />
 
       {/* ── View Documents Modal ── */}
       {viewDocumentsResident && (

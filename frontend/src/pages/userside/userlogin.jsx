@@ -683,7 +683,6 @@ export default function UserLogin() {
               <div className="ulog-status-banner__body">
                 <p className="ulog-status-banner__title">Registration Denied</p>
                 <p className="ulog-status-banner__desc">{statusBanner.message}</p>
-                <a href="/signup" className="ulog-status-banner__link">Register again →</a>
               </div>
             </div>
           )}
