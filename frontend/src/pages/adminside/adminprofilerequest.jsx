@@ -17,7 +17,7 @@ const CHANGE_LABELS = {
   contactNumber: 'Mobile Number',
   email: 'Email Address',
   homeAddress: 'Home Address',
-  purok: 'Purok / Sitio',
+  purok: 'Purok',
   residencyStatus: 'Residency Status',
   lengthOfStay: 'Length of Stay',
   voterStatus: 'Voter Status',

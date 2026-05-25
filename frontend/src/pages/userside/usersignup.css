@@ -313,6 +313,13 @@
   box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
 }
 
+.su-field input:disabled,
+.su-field select:disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
 .su-field input::placeholder { color: #9ca3af; }
 .su-input--error { border-color: #ef4444 !important; }
 
@@ -363,6 +370,18 @@ input.su-bday-input {
 }
 .su-agree a { color: #2563eb; font-weight: 600; text-decoration: none; }
 .su-agree a:hover { text-decoration: underline; }
+
+.su-legal-link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  text-decoration: none;
+}
+.su-legal-link:hover { text-decoration: underline; }
 
 .su-checkbox { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #d1d5db; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0; transition: all 0.15s; margin-top: 1px; }
 .su-checkbox--checked { background: #2563eb; border-color: #2563eb; }
@@ -457,6 +476,139 @@ input.su-bday-input {
   transition: opacity 0.15s; margin-top: 4px;
 }
 .su-done__btn:hover { opacity: 0.9; }
+
+/* Legal modal */
+.su-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0,0,0,0.68);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: suFadeIn 0.2s ease;
+}
+
+@keyframes suFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.su-modal {
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  background: #0d1b36;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.55);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: suSlideUp 0.25s ease;
+}
+
+@keyframes suSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.su-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.su-modal__title {
+  font-family: 'Cinzel', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.su-modal__close {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.su-modal__close:hover { background: rgba(255,255,255,0.12); }
+.su-modal__close svg { width: 16px; height: 16px; stroke: #94a3b8; }
+
+.su-modal__body {
+  overflow-y: auto;
+  padding: 24px 28px 28px;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: #1a3a7a transparent;
+}
+.su-modal__body::-webkit-scrollbar { width: 4px; }
+.su-modal__body::-webkit-scrollbar-thumb { background: #1a3a7a; border-radius: 2px; }
+
+.su-modal__intro {
+  font-size: 13.5px;
+  color: #94a3b8;
+  line-height: 1.7;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.su-modal__section { margin-bottom: 20px; }
+.su-modal__section:last-child { margin-bottom: 0; }
+
+.su-modal__section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+}
+
+.su-modal__text {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.7;
+}
+
+.su-modal__list {
+  margin-top: 8px;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.su-modal__list li {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.6;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.su-modal__list li::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2563eb;
+  flex-shrink: 0;
+  margin-top: 7px;
+}
 
 /* ════════════════════════════════════════════
    RESPONSIVE
@@ -733,5 +885,23 @@ input.su-bday-input {
     padding: 24px 18px;
     border-radius: 14px;
     max-height: 92vh;
+  }
+
+  .su-modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .su-modal {
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .su-modal__header {
+    padding: 20px 20px 16px;
+  }
+
+  .su-modal__body {
+    padding: 20px 20px 32px;
   }
 }

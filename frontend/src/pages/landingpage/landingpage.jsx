@@ -477,8 +477,8 @@ export default function LandingPage() {
           Unauthorized access is strictly prohibited.
         </p>
         <div className="lp-footer__links">
-          <button className="lp-footer__link" onClick={() => setModal(PRIVACY_POLICY)}>Privacy Policy</button>
           <button className="lp-footer__link" onClick={() => setModal(TERMS_OF_USE)}>Terms of Use</button>
+          <button className="lp-footer__link" onClick={() => setModal(PRIVACY_POLICY)}>Privacy Policy</button>
         </div>
       </footer>
 

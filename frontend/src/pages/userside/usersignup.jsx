@@ -9,9 +9,84 @@ const API_URL = import.meta.env.VITE_BACKEND_URL;
 
 const SEX          = ['Male', 'Female'];
 const PUROKS       = ['Purok 1', 'Purok 2', 'Purok 3', 'Purok 4', 'Purok 5', 'Purok 6', 'Purok 7', 'Iram'];
+const DEFAULT_CITY = 'Olongapo City';
+const DEFAULT_BARANGAY = 'New Cabalan';
+const DEFAULT_REGION = 'Region III';
 
 const STEPS = ['Personal Info', 'Account Setup', 'Information Verification'];
 const SUFFIXES = ['Jr', 'Sr', 'I', 'II', 'III', 'IV', 'V'];
+
+const PRIVACY_POLICY = {
+  title: 'Privacy Policy',
+  intro: 'This Privacy Policy explains how the system collects, uses, and protects user information in compliance with the Data Privacy Act of 2012.',
+  sections: [
+    {
+      heading: '1. Information We Collect',
+      body: 'We may collect personal information such as your name, contact details, and any data submitted through complaints, appointments, and other system features.',
+    },
+    {
+      heading: '2. Purpose of Data Collection',
+      body: 'Your information is collected to:',
+      list: ['Process complaints and requests', 'Manage appointments', 'Send announcements and notifications', 'Improve barangay services'],
+    },
+    {
+      heading: '3. Data Protection',
+      body: 'We implement appropriate security measures to protect your personal data from unauthorized access, disclosure, or misuse. Access is limited to authorized barangay officials only.',
+    },
+    {
+      heading: '4. Data Sharing',
+      body: 'Your personal information will not be shared with third parties unless required by law or necessary for official barangay transactions.',
+    },
+    {
+      heading: '5. User Rights',
+      body: 'You have the right to:',
+      list: ['Access your personal data', 'Request corrections to inaccurate information', 'Request deletion of your data, subject to legal limitations'],
+    },
+    {
+      heading: '6. Data Retention',
+      body: 'Personal data will be stored only for as long as necessary to fulfill its purpose or as required by law.',
+    },
+    {
+      heading: '7. Updates to This Policy',
+      body: 'This policy may be updated from time to time. Users will be notified of significant changes through the system.',
+    },
+  ],
+};
+
+const TERMS_OF_USE = {
+  title: 'Terms of Use',
+  intro: 'By using this system, you agree to the following terms and conditions:',
+  sections: [
+    {
+      heading: '1. Proper Use',
+      body: 'Users must provide accurate and truthful information when using the system. Any misuse, including false complaints or misleading data, is strictly prohibited.',
+    },
+    {
+      heading: '2. User Responsibility',
+      body: 'You are responsible for maintaining the confidentiality of your account and any activities conducted under it.',
+    },
+    {
+      heading: '3. System Access',
+      body: 'The system is intended for official barangay-related transactions only. Unauthorized access or attempts to disrupt the system are prohibited.',
+    },
+    {
+      heading: '4. Complaint Submission',
+      body: 'All complaints must be submitted in good faith. The barangay reserves the right to review, validate, and act upon each report.',
+    },
+    {
+      heading: '5. Appointment Scheduling',
+      body: 'Users must follow scheduled appointments. Repeated no-shows may result in restrictions.',
+    },
+    {
+      heading: '6. Limitation of Liability',
+      body: 'The barangay is not liable for delays or issues caused by system downtime, technical errors, or incorrect information provided by users.',
+    },
+    {
+      heading: '7. Changes to Terms',
+      body: 'These terms may be updated at any time. Continued use of the system means you accept any changes.',
+    },
+  ],
+};
 
 // ── SVG helpers ──────────────────────────────────────────────────────────────
 const ChevronR = () => (
@@ -83,6 +158,7 @@ export default function UserSignup() {
   const [showPw,    setShowPw]    = useState(false);
   const [showCPw,   setShowCPw]   = useState(false);
   const [agree,     setAgree]     = useState(false);
+  const [legalModal, setLegalModal] = useState(null);
 
   // ── Step 2 — Information Verification ─────────────────────────────────────
   const [validIdFile, setValidIdFile] = useState(null);
@@ -196,6 +272,11 @@ export default function UserSignup() {
       const validIdData = await validIdRes.json();
       console.log("[Signup] Valid ID upload response:", { ok: validIdRes.ok, url: validIdData.url?.substring(0, 80) });
       if (!validIdRes.ok) throw new Error('Valid ID upload failed');
+      if (!validIdData.url) throw new Error('Valid ID upload did not return a document URL');
+
+      const fullHomeAddress = [homeAddress, DEFAULT_BARANGAY, DEFAULT_CITY, DEFAULT_REGION]
+        .filter(Boolean)
+        .join(', ');
 
       // Register user with all information
       const registerRes = await fetch(`${API_URL}/usersignup`, {
@@ -211,14 +292,33 @@ export default function UserSignup() {
           birthdate:     bday,
           sex,
           contactNumber: contact,
-          homeAddress,
+          homeAddress: fullHomeAddress,
           purok,
           validId: validIdData.url,
+          validIdUrl: validIdData.url,
         }),
       });
       const registerData = await registerRes.json();
-      console.log("[Signup] Registration response:", { ok: registerRes.ok });
+      console.log("[Signup] Registration response:", {
+        ok: registerRes.ok,
+        hasValidId: !!registerData.user?.validIdUrl,
+      });
       if (!registerRes.ok) throw new Error(registerData.message || 'Registration failed');
+
+      const documentsRes = await fetch(`${API_URL}/usersignup/documents/${encodeURIComponent(email)}`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ validId: validIdData.url }),
+      });
+      if (!documentsRes.ok) {
+        const documentsData = await documentsRes.json().catch(() => ({}));
+        throw new Error(documentsData.message || 'Failed to save uploaded documents');
+      }
+      const documentsData = await documentsRes.json().catch(() => ({}));
+      console.log("[Signup] Documents save response:", {
+        ok: documentsRes.ok,
+        hasValidId: !!documentsData.user?.validIdUrl,
+      });
 
       // Mark registration as complete
       setDone(true);
@@ -277,6 +377,82 @@ export default function UserSignup() {
 
   return (
     <>
+      {/* Legal Modal — Terms of Service / Privacy Policy */}
+      {legalModal && (
+        <div className="su-modal-overlay" onClick={() => setLegalModal(null)}>
+          <div className="su-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="su-modal__header">
+              <h2 className="su-modal__title">{legalModal === 'terms' ? TERMS_OF_USE.title : PRIVACY_POLICY.title}</h2>
+              <button
+                type="button"
+                className="su-modal__close"
+                onClick={() => setLegalModal(null)}
+                aria-label="Close modal"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="su-modal__body">
+              <p className="su-modal__intro">{legalModal === 'terms' ? TERMS_OF_USE.intro : PRIVACY_POLICY.intro}</p>
+              {(legalModal === 'terms' ? TERMS_OF_USE.sections : PRIVACY_POLICY.sections).map((section, idx) => (
+                <div key={idx} className="su-modal__section">
+                  <h3 className="su-modal__section-title">{section.heading}</h3>
+                  <p className="su-modal__text">{section.body}</p>
+                  {section.list && (
+                    <ul className="su-modal__list">
+                      {section.list.map((item, i) => <li key={i}>{item}</li>)}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '20px 28px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setLegalModal(null)}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: 8,
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#94a3b8',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s'
+                }}
+              >
+                Close
+              </button>
+              {legalModal === 'terms' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAgree(true);
+                    setLegalModal(null);
+                  }}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: 8,
+                    background: '#2563eb',
+                    border: 'none',
+                    color: '#fff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'background 0.15s'
+                  }}
+                >
+                  I Agree
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating Summary Panel */}
       {step === 3 && (
         <div className="su-summary-overlay">
@@ -303,7 +479,10 @@ export default function UserSignup() {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Suffix</label>
-                  <input type="text" value={suffix} onChange={e => setSuffix(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  <select value={suffix} onChange={e => setSuffix(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                    <option value="">None</option>
+                    {SUFFIXES.map(s => <option key={s}>{s}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Date of Birth</label>
@@ -323,8 +502,22 @@ export default function UserSignup() {
                 </div>
               </div>
               <div style={{ marginTop: 16 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Home Address</label>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Street/Building No.</label>
                 <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Barangay</label>
+                  <input type="text" value={DEFAULT_BARANGAY} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>City</label>
+                  <input type="text" value={DEFAULT_CITY} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Region</label>
+                  <input type="text" value={DEFAULT_REGION} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                </div>
               </div>
             </div>
 
@@ -597,9 +790,25 @@ export default function UserSignup() {
 
                 {/* Home Address */}
                 <div className="su-field">
-                  <label>Home Address</label>
-                  <input type="text" placeholder="e.g. 12 Rizal Street" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} className={errors.homeAddress ? 'su-input--error' : ''}/>
+                  <label>Street/Building No.</label>
+                  <input type="text" placeholder="123 Mangga St." value={homeAddress} onChange={e => setHomeAddress(e.target.value)} className={errors.homeAddress ? 'su-input--error' : ''}/>
                   {errors.homeAddress && <p className="su-field-error">{errors.homeAddress}</p>}
+                </div>
+
+                <div className="su-row-2">
+                  <div className="su-field">
+                    <label>Barangay</label>
+                    <input type="text" placeholder="Barangay" value={DEFAULT_BARANGAY} disabled />
+                  </div>
+                  <div className="su-field">
+                    <label>City</label>
+                    <input type="text" placeholder="City" value={DEFAULT_CITY} disabled />
+                  </div>
+                </div>
+
+                <div className="su-field">
+                  <label>Region</label>
+                  <input type="text" placeholder="Region" value={DEFAULT_REGION} disabled />
                 </div>
 
                 {/* Purok */}
@@ -686,7 +895,7 @@ export default function UserSignup() {
                   >
                     {agree && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>}
                   </button>
-                  <span>I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a> of the NCESS — New Cabalan E-Service System.</span>
+                  <span>I agree to the <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('terms'); }}>Terms of Service</a> and <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('privacy'); }}>Privacy Policy</a> of the NCESS — New Cabalan E-Service System.</span>
                 </div>
                 {errors.agree && <p className="su-field-error">{errors.agree}</p>}
               </div>

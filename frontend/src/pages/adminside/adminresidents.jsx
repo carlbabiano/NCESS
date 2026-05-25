@@ -74,12 +74,8 @@ function mapUser(u) {
     // gov
     idType:   u.idType   || '',
     idNumber: u.idNumber || '',
-    // additional
-    occupation:            u.occupation            || '',
-    educationalAttainment: u.educationalAttainment || '',
     // verification documents
     validIdUrl:           u.validIdUrl           || '',
-    proofOfResidencyUrl:  u.proofOfResidencyUrl  || '',
     createdAt: u.createdAt || '',
   };
 }
@@ -114,7 +110,7 @@ const PROFILE_SECTIONS = [
     ),
     fields: [
       { key: 'homeAddress',     label: 'Full Address',          fullWidth: true },
-      { key: 'purok',           label: 'Purok / Sitio'          },
+      { key: 'purok',           label: 'Purok'          },
       { key: 'residencyStatus', label: 'Residency Status'       },
       { key: 'lengthOfStay',    label: 'Length of Stay'         },
       { key: 'householdId',     label: 'Household / Family ID'  },
@@ -147,6 +143,20 @@ const PROFILE_SECTIONS = [
       { key: 'educationalAttainment', label: 'Educational Attainment' },
     ],
   },
+  {
+    label: 'Submitted Documents',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="11" x2="12" y2="17"/>
+        <line x1="9" y1="14" x2="15" y2="14"/>
+      </svg>
+    ),
+    fields: [
+      { key: 'validIdUrl', label: 'Valid ID', type: 'image', fullWidth: true },
+    ],
+  },
 ];
 
 // ── Documents Modal ──────────────────────────────────────────────────────────
@@ -156,15 +166,11 @@ function DocumentsModal({ resident, onClose }) {
   if (!resident) return null;
 
   const hasValidId = !!resident.validIdUrl;
-  const hasProof = !!resident.proofOfResidencyUrl;
-  const hasAny = hasValidId || hasProof;
 
   console.log("[DocumentsModal] Displaying documents for:", { 
     name: resident.name, 
     hasValidId, 
-    hasProof,
     validIdUrl: resident.validIdUrl?.substring(0, 80),
-    proofOfResidencyUrl: resident.proofOfResidencyUrl?.substring(0, 80)
   });
 
   const renderImage = (imageUrl, label, onExpand) => (
@@ -304,7 +310,7 @@ function DocumentsModal({ resident, onClose }) {
             overflowY: 'auto',
             gap: 20,
           }}>
-            {!hasAny && (
+            {!hasValidId && (
               <div style={{
                 textAlign: 'center',
                 padding: '40px 20px',
@@ -318,7 +324,7 @@ function DocumentsModal({ resident, onClose }) {
               </div>
             )}
 
-            {hasAny && (
+            {hasValidId && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* Valid ID */}
                 <div>
@@ -340,25 +346,6 @@ function DocumentsModal({ resident, onClose }) {
                   )}
                 </div>
 
-                {/* Proof of Residency */}
-                <div>
-                  <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Proof of Residency</p>
-                  {hasProof ? (
-                    renderImage(resident.proofOfResidencyUrl, 'Proof of Residency', () => setFullScreenImage({ url: resident.proofOfResidencyUrl, title: 'Proof of Residency' }))
-                  ) : (
-                    <div style={{
-                      padding: 16,
-                      background: '#f9fafb',
-                      border: '1px dashed #d1d5db',
-                      borderRadius: 8,
-                      textAlign: 'center',
-                      color: '#9ca3af',
-                      fontSize: 13,
-                    }}>
-                      Not submitted
-                    </div>
-                  )}
-                </div>
               </div>
             )}
           </div>
@@ -795,82 +782,9 @@ function ProfileModal({ resident, onClose, onApprove, onRejectClick, actionLoadi
               )}
 
               {/* Approve / Reject shown on last tab */}
-              {isLast && resident.status === 'pending' && (
-                <>
-                  <button
-                    onClick={() => onRejectClick(resident._id)}
-                    disabled={!!actionLoading}
-                    style={{
-                      display:'flex', alignItems:'center', gap:6,
-                      padding:'9px 18px', borderRadius:9, border:'1.5px solid #fecaca',
-                      background:'#fff', color:'#dc2626', fontSize:13, fontWeight:600,
-                      fontFamily:'DM Sans,sans-serif', cursor:'pointer', marginLeft:'auto',
-                    }}
-                  >
-                    {actionLoading === 'denied' ? 'Denying…' : 'Deny'}
-                  </button>
-                  <button
-                    onClick={() => onApprove(resident._id)}
-                    disabled={!!actionLoading}
-                    style={{
-                      display:'flex', alignItems:'center', gap:7,
-                      padding:'9px 20px', borderRadius:9, border:'none',
-                      background:'#16a34a', color:'#fff', fontSize:13, fontWeight:600,
-                      fontFamily:'DM Sans,sans-serif', cursor:'pointer',
-                    }}
-                  >
-                    {actionLoading === 'approved' ? 'Approving…' : (
-                      <>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
-                          <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                        Approve
-                      </>
-                    )}
-                  </button>
-                </>
-              )}
-
-              {isLast && resident.status === 'approved' && (
-                <button
-                  onClick={() => onRejectClick(resident._id)}
-                  disabled={!!actionLoading}
-                  style={{
-                    display:'flex', alignItems:'center', gap:6,
-                    padding:'9px 18px', borderRadius:9, border:'1.5px solid #fecaca',
-                    background:'#fff', color:'#dc2626', fontSize:13, fontWeight:600,
-                    fontFamily:'DM Sans,sans-serif', cursor:'pointer', marginLeft:'auto',
-                  }}
-                >
-                  {actionLoading === 'denied' ? 'Updating…' : 'Revoke Approval'}
-                </button>
-              )}
-
-              {isLast && resident.status === 'denied' && (
-                <button
-                  onClick={() => onApprove(resident._id)}
-                  disabled={!!actionLoading}
-                  style={{
-                    display:'flex', alignItems:'center', gap:7,
-                    padding:'9px 20px', borderRadius:9, border:'none',
-                    background:'#16a34a', color:'#fff', fontSize:13, fontWeight:600,
-                    fontFamily:'DM Sans,sans-serif', cursor:'pointer', marginLeft:'auto',
-                  }}
-                >
-                  {actionLoading === 'approved' ? 'Approving…' : (
-                    <>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                      Re-Approve
-                    </>
-                  )}
-                </button>
-              )}
-
-              {isLast && resident.status !== 'pending' && (
-                <button className="utb-back-btn" onClick={onClose} style={{ marginLeft: resident.status === 'approved' ? 0 : 0 }}>
-                  Close
+              {isLast && (
+                <button className="utb-back-btn" onClick={onClose}>
+                  Finish
                 </button>
               )}
             </div>
@@ -942,19 +856,30 @@ export default function AdminResidents({ initialTab = 'All' }) {
     function upsertResident(user) {
       if (!user?._id) return;
       const mapped = mapUser(user);
-      console.log("[Socket.io] Resident update received:", { id: mapped._id, name: mapped.name, hasValidId: !!mapped.validIdUrl, hasProof: !!mapped.proofOfResidencyUrl });
+      console.log("[Socket.io] Resident update received:", { id: mapped._id, name: mapped.name, hasValidId: !!mapped.validIdUrl });
       
       setResidents(prev => {
         const exists = prev.some(resident => resident._id === mapped._id);
-        if (exists) return prev.map(resident => resident._id === mapped._id ? mapped : resident);
+        if (exists) {
+          return prev.map(resident => resident._id === mapped._id
+            ? { ...mapped, validIdUrl: mapped.validIdUrl || resident.validIdUrl || '' }
+            : resident
+          );
+        }
         return [mapped, ...prev];
       });
       
       // Update profile modal if viewing this resident
-      setViewResident(prev => prev?._id === mapped._id ? mapped : prev);
+      setViewResident(prev => prev?._id === mapped._id
+        ? { ...mapped, validIdUrl: mapped.validIdUrl || prev.validIdUrl || '' }
+        : prev
+      );
       
       // Update documents modal if viewing this resident
-      setViewDocumentsResident(prev => prev?._id === mapped._id ? mapped : prev);
+      setViewDocumentsResident(prev => prev?._id === mapped._id
+        ? { ...mapped, validIdUrl: mapped.validIdUrl || prev.validIdUrl || '' }
+        : prev
+      );
     }
 
     socket.on('resident_account_submitted', (user) => {
@@ -1016,6 +941,33 @@ export default function AdminResidents({ initialTab = 'All' }) {
       showToast('Action failed. Please try again.');
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  async function openDocumentsModal(resident) {
+    setOpenMenu(null);
+    setViewDocumentsResident(resident);
+
+    try {
+      const token = getAdminToken();
+      const res = await fetch(`${API_URL}/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const latest = data.map(mapUser).find(user => user._id === resident._id);
+      if (latest) {
+        console.log("[DocumentsModal] Fresh resident document check:", {
+          id: latest._id,
+          name: latest.name,
+          hasValidId: !!latest.validIdUrl,
+          validIdUrl: latest.validIdUrl?.substring(0, 80),
+        });
+        setResidents(prev => prev.map(item => item._id === latest._id ? latest : item));
+        setViewDocumentsResident(latest);
+      }
+    } catch (err) {
+      console.error("[DocumentsModal] Failed to refresh resident documents:", err);
     }
   }
 
@@ -1125,7 +1077,7 @@ export default function AdminResidents({ initialTab = 'All' }) {
                 <thead>
                   <tr>
                     <th>Full Name</th>
-                    <th>Purok / Sitio</th>
+                    <th>Purok</th>
                     <th>Contact Info</th>
                     <th>Registered</th>
                     <th>Status</th>
@@ -1207,7 +1159,7 @@ export default function AdminResidents({ initialTab = 'All' }) {
                                 </button>
                                 <button
                                   className="res-dropdown__item"
-                                  onClick={() => { setViewDocumentsResident(r); setOpenMenu(null); }}
+                                  onClick={() => openDocumentsModal(r)}
                                 >
                                   View Submitted Documents
                                 </button>

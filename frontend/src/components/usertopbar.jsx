@@ -333,7 +333,7 @@ const SECTIONS = [
     fields: [
       { key: 'houseNo',         label: 'House No.',             editable: false },
       { key: 'street',          label: 'Street',                editable: false },
-      { key: 'purok',           label: 'Purok / Sitio',         editable: false, options: PUROK_OPTIONS },
+      { key: 'purok',           label: 'Purok',         editable: false, options: PUROK_OPTIONS },
       { key: 'residencyStatus', label: 'Residency Status',      editable: false, options: RESIDENCY_STATUS_OPTIONS },
       { key: 'lengthOfStay',    label: 'Length of Stay',        editable: false },
       { key: 'householdId',     label: 'Household / Family ID', editable: false },

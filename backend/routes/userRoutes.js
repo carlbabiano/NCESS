@@ -38,7 +38,6 @@ const userSchema = new mongoose.Schema({
   educationalAttainment:  { type: String, default: '' },
   // Verification documents from signup (Cloudinary URLs)
   validIdUrl:           { type: String, default: '' },
-  proofOfResidencyUrl:  { type: String, default: '' },
   // Password reset
   resetCode:            { type: String, default: '' },
   resetCodeExpiry:      { type: Date, default: null },
@@ -227,6 +226,7 @@ router.post("/usersignup", async (req, res) => {
     birthdate, sex, contactNumber,
     homeAddress, purok,
   } = req.body;
+  const validId = req.body.validId || req.body.validIdUrl || '';
 
   if (!email || !password)
     return res.status(400).json({ message: "Email and password are required" });
@@ -259,9 +259,15 @@ router.post("/usersignup", async (req, res) => {
         existingUser.contactNumber = contactNumber || '';
         existingUser.homeAddress   = homeAddress   || '';
         existingUser.purok         = purok         || '';
+        if (validId) {
+          existingUser.validIdUrl = validId;
+        }
         await existingUser.save();
         req.app.get('io')?.to('admin_room').emit('resident_account_submitted', safeUser(existingUser));
-        return res.status(201).json({ message: "Re-registration submitted. Awaiting barangay approval." });
+        return res.status(201).json({
+          message: "Re-registration submitted. Awaiting barangay approval.",
+          user: safeUser(existingUser),
+        });
       }
       return res.status(409).json({ message: "An account with this email already exists." });
     }
@@ -272,10 +278,14 @@ router.post("/usersignup", async (req, res) => {
       firstName: firstName || '', middleName: middleName || '', lastName: lastName || '',
       birthdate: birthdate || '', sex: sex || '', contactNumber: contactNumber || '',
       homeAddress: homeAddress || '', purok: purok || '',
+      validIdUrl: validId || '',
     });
     await user.save();
     req.app.get('io')?.to('admin_room').emit('resident_account_submitted', safeUser(user));
-    res.status(201).json({ message: "Registration submitted. Awaiting barangay approval." });
+    res.status(201).json({
+      message: "Registration submitted. Awaiting barangay approval.",
+      user: safeUser(user),
+    });
   } catch (error) {
     console.error("Signup error:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -286,11 +296,10 @@ router.post("/usersignup", async (req, res) => {
 router.post("/usersignup/documents/:email", async (req, res) => {
   try {
     const { email } = req.params;
-    const { validId, proofOfResidency } = req.body;
+    const validId = req.body.validId || req.body.validIdUrl || '';
 
-    console.log("[Documents Storage] Received:", { email, hasValidId: !!validId, hasProof: !!proofOfResidency });
+    console.log("[Documents Storage] Received:", { email, hasValidId: !!validId });
     console.log("[Documents Storage] ValidID URL:", validId?.substring(0, 80) + '...');
-    console.log("[Documents Storage] ProofOfResidency URL:", proofOfResidency?.substring(0, 80) + '...');
 
     const user = await User.findOne({ email });
     if (!user) {
@@ -302,17 +311,12 @@ router.post("/usersignup/documents/:email", async (req, res) => {
       user.validIdUrl = validId;
       console.log("[Documents Storage] Updated validIdUrl");
     }
-    if (proofOfResidency) {
-      user.proofOfResidencyUrl = proofOfResidency;
-      console.log("[Documents Storage] Updated proofOfResidencyUrl");
-    }
 
     await user.save();
     
     console.log("[Documents Storage] Saved to DB:", { 
       email: user.email, 
       validIdUrl: user.validIdUrl?.substring(0, 80) + '...',
-      proofOfResidencyUrl: user.proofOfResidencyUrl?.substring(0, 80) + '...'
     });
     
     // Broadcast update to all admins for real-time viewing
