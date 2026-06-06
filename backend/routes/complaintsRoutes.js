@@ -4,6 +4,31 @@ import Complaint from '../models/complaints.js';
 
 const router = express.Router();
 
+const DEFAULT_PRIORITY_BY_CATEGORY = {
+  'Waste Management': 'Normal',
+  Flooding: 'High',
+  'Street Lighting': 'Medium',
+  'Noise Complaint': 'Normal',
+  'Illegal Parking': 'Medium',
+  'Stray Animals': 'Medium',
+  Infrastructure: 'High',
+  Other: 'Normal',
+};
+
+function getDefaultPriority(category) {
+  return DEFAULT_PRIORITY_BY_CATEGORY[category] || DEFAULT_PRIORITY_BY_CATEGORY.Other;
+}
+
+function normalizePriority(priority) {
+  return priority === 'Low' ? 'Normal' : priority;
+}
+
+function getResidentPriority(category, priority) {
+  if (DEFAULT_PRIORITY_BY_CATEGORY[category]) return getDefaultPriority(category);
+  const normalizedPriority = normalizePriority(priority);
+  return ['Normal', 'Medium', 'High'].includes(normalizedPriority) ? normalizedPriority : DEFAULT_PRIORITY_BY_CATEGORY.Other;
+}
+
 /* ── Auth helpers ─────────────────────────────────────────────────────────── */
 
 function verifyAdmin(req, res, next) {
@@ -44,7 +69,7 @@ function serialize(doc) {
     category:         o.category,
     location:         o.location || '',
     description:      o.description,
-    priority:         o.priority,
+    priority:         normalizePriority(o.priority),
     status:           o.status,
     assignedOfficial: o.assignedOfficial,
     walkinFiled:      o.walkinFiled,
@@ -98,7 +123,7 @@ router.post('/admin/complaints', verifyAdmin, async (req, res) => {
       category,
       location:         location || '',
       description:      description.trim(),
-      priority:         priority         || 'Medium',
+      priority:         normalizePriority(priority) || 'Medium',
       assignedOfficial: assignedOfficial || 'Unassigned',
       status:           status           || 'Pending',
       walkinFiled:      true,
@@ -124,6 +149,7 @@ router.patch('/admin/complaints/:id/status', verifyAdmin, async (req, res) => {
 
     const prevStatus = doc.status;
     doc.status         = status;
+    doc.priority       = normalizePriority(doc.priority);
     doc.resolutionNote = resolutionNote !== undefined ? resolutionNote : doc.resolutionNote;
     await doc.save();
 
@@ -152,6 +178,7 @@ router.patch('/admin/complaints/:id', verifyAdmin, async (req, res) => {
     const allowed = ['category', 'location', 'description', 'priority', 'assignedOfficial', 'resolutionNote'];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
+    if (update.priority !== undefined) update.priority = normalizePriority(update.priority);
     const doc = await Complaint.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' });
     if (!doc) return res.status(404).json({ message: 'Not found.' });
     const serialized = serialize(doc);
@@ -198,18 +225,21 @@ router.get('/complaints', verifyUser, async (req, res) => {
 router.post('/complaints', verifyUser, async (req, res) => {
   try {
     const { category, location, description, priority } = req.body;
-    if (!category || !description)
-      return res.status(400).json({ message: 'category and description are required.' });
+    const categoryText = String(category || '').trim();
+    const locationText = String(location || '').trim();
+    const descriptionText = String(description || '').trim();
+    if (!categoryText || !locationText || !descriptionText)
+      return res.status(400).json({ message: 'category, location and description are required.' });
 
     const resident = req.user.fullName || req.user.email || 'Resident';
     const doc = await Complaint.create({
       resident,
       residentEmail:    req.user.email || '',
       userId:           req.user.id,
-      category,
-      location:         location    || '',
-      description:      description.trim(),
-      priority:         priority    || 'Medium',
+      category:         categoryText,
+      location:         locationText,
+      description:      descriptionText,
+      priority:         getResidentPriority(categoryText, priority),
       assignedOfficial: 'Unassigned',
       status:           'Pending',
       walkinFiled:      false,

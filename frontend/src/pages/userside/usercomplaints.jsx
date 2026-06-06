@@ -11,7 +11,23 @@ const CATEGORIES = [
   'Illegal Parking', 'Stray Animals', 'Infrastructure', 'Other',
 ];
 
-const PRIORITY_DOT = { High: '#ef4444', Medium: '#f59e0b', Low: '#22c55e' };
+const DEFAULT_PRIORITY_BY_CATEGORY = {
+  'Waste Management': 'Normal',
+  Flooding: 'High',
+  'Street Lighting': 'Medium',
+  'Noise Complaint': 'Normal',
+  'Illegal Parking': 'Medium',
+  'Stray Animals': 'Medium',
+  Infrastructure: 'High',
+  Other: 'Normal',
+};
+
+const PRIORITY_DOT = { High: '#ef4444', Medium: '#f59e0b', Normal: '#22c55e' };
+const OTHER_PRIORITY_OPTIONS = [
+  { label: 'Normal', value: 'Normal' },
+  { label: 'Medium', value: 'Medium' },
+  { label: 'High', value: 'High' },
+];
 const STATUS_CLS = {
   'In Progress': 'ucs--inprogress',
   Resolved:      'ucs--resolved',
@@ -28,7 +44,11 @@ function getToken() {
   );
 }
 
-const EMPTY_FORM = { category: '', customCategory: '', location: '', description: '', priority: 'Medium' };
+const EMPTY_FORM = { category: '', customCategory: '', location: '', description: '', priority: 'Normal' };
+
+function getDefaultPriority(category) {
+  return DEFAULT_PRIORITY_BY_CATEGORY[category] || DEFAULT_PRIORITY_BY_CATEGORY.Other;
+}
 
 export default function UserComplaints() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
@@ -36,6 +56,7 @@ export default function UserComplaints() {
   const [loading,     setLoading]     = useState(true);
   const [fetchError,  setFetchError]  = useState('');
   const [search,      setSearch]      = useState('');
+  const [complaintsOpen, setComplaintsOpen] = useState(false);
 
   // File modal
   const [showModal,   setShowModal]   = useState(false);
@@ -109,18 +130,37 @@ export default function UserComplaints() {
       .some((value) => String(value || '').toLowerCase().includes(q));
   });
 
+  const latestComplaint = filtered[0];
+  const filteredStats = {
+    pending: filtered.filter(c => c.status === 'Pending').length,
+    inProgress: filtered.filter(c => c.status === 'In Progress').length,
+    resolved: filtered.filter(c => c.status === 'Resolved').length,
+  };
+
   /* ── Form helpers ── */
   const openModal  = () => { setForm(EMPTY_FORM); setFormError(''); setShowModal(true); };
   const closeModal = () => { setShowModal(false); setFormError(''); };
   const handleChange = (field, val) => {
-    setForm(prev => ({ ...prev, [field]: val }));
+    setForm(prev => {
+      if (field === 'category') {
+        return {
+          ...prev,
+          category: val,
+          customCategory: val === 'Other' ? prev.customCategory : '',
+          priority: getDefaultPriority(val),
+        };
+      }
+      return { ...prev, [field]: val };
+    });
     if (formError) setFormError('');
   };
 
   /* ── Submit complaint ── */
   const handleSubmit = async () => {
     const categoryVal = form.category === 'Other' ? form.customCategory.trim() : form.category;
+    const priorityVal = form.category === 'Other' ? form.priority : getDefaultPriority(form.category);
     if (!categoryVal)              return setFormError('Please select a category.');
+    if (!form.location.trim())    return setFormError('Location is required.');
     if (!form.description.trim()) return setFormError('Description is required.');
 
     setSubmitting(true);
@@ -132,7 +172,7 @@ export default function UserComplaints() {
           category:    categoryVal,
           location:    form.location.trim(),
           description: form.description.trim(),
-          priority:    form.priority,
+          priority:    priorityVal,
         }),
       });
       const data = await res.json();
@@ -229,24 +269,70 @@ export default function UserComplaints() {
                   {filtered.length === 0 && (
                     <tr><td colSpan="5" className="ucmp-empty">No complaints found.</td></tr>
                   )}
-                  {filtered.map(c => (
-                    <tr key={c._id} className="ucmp-row">
-                      <td className="ucmp-cat">{c.category}</td>
-                      <td data-label="Priority">
-                        <span className="ucmp-priority">
-                          <span className="ucmp-priority__dot" style={{ background: PRIORITY_DOT[c.priority] || PRIORITY_DOT.Medium }} />
-                          {c.priority}
-                        </span>
-                      </td>
-                      <td data-label="Date Filed" className="ucmp-date">{c.dateFiled}</td>
-                      <td data-label="Status">
-                        <span className={`ucmp-badge ${STATUS_CLS[c.status] || 'ucs--pending'}`}>{c.status}</span>
-                      </td>
-                      <td data-label="Action">
-                        <button className="ucmp-track-btn" onClick={() => setShowTrack(c)}>Track →</button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filtered.length > 0 && (
+                    <>
+                      <tr className="ucmp-row ucmp-summary-row">
+                        <td className="ucmp-cat">
+                          <button
+                            type="button"
+                            className="ucmp-summary-toggle"
+                            onClick={() => setComplaintsOpen(v => !v)}
+                          >
+                            <span className={`ucmp-summary-chevron${complaintsOpen ? ' ucmp-summary-chevron--open' : ''}`}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polyline points="9 18 15 12 9 6" />
+                              </svg>
+                            </span>
+                            <span>
+                              My complaints
+                              <small>{filtered.length} filed</small>
+                            </span>
+                          </button>
+                        </td>
+                        <td data-label="Priority">
+                          {latestComplaint && (
+                            <span className="ucmp-priority">
+                              <span className="ucmp-priority__dot" style={{ background: PRIORITY_DOT[latestComplaint.priority] || PRIORITY_DOT.Medium }} />
+                              Latest: {latestComplaint.priority}
+                            </span>
+                          )}
+                        </td>
+                        <td data-label="Date Filed" className="ucmp-date">{latestComplaint?.dateFiled}</td>
+                        <td data-label="Status">
+                          <span className="ucmp-summary-status">
+                            {filteredStats.pending} pending · {filteredStats.inProgress} in progress · {filteredStats.resolved} resolved
+                          </span>
+                        </td>
+                        <td data-label="Action">
+                          <button className="ucmp-track-btn" onClick={() => setComplaintsOpen(v => !v)}>
+                            {complaintsOpen ? 'Hide' : 'Show'} complaints
+                          </button>
+                        </td>
+                      </tr>
+                      {complaintsOpen && (
+                        <tr className="ucmp-dropdown-row">
+                          <td colSpan="5">
+                            <div className="ucmp-complaint-list">
+                              {filtered.map(c => (
+                                <div key={c._id} className="ucmp-complaint-item">
+                                  <div className="ucmp-complaint-item__main">
+                                    <p className="ucmp-complaint-item__cat">{c.category}</p>
+                                    <p className="ucmp-complaint-item__meta">{c.dateFiled}{c.location ? ` · ${c.location}` : ''}</p>
+                                  </div>
+                                  <span className="ucmp-priority">
+                                    <span className="ucmp-priority__dot" style={{ background: PRIORITY_DOT[c.priority] || PRIORITY_DOT.Medium }} />
+                                    {c.priority}
+                                  </span>
+                                  <span className={`ucmp-badge ${STATUS_CLS[c.status] || 'ucs--pending'}`}>{c.status}</span>
+                                  <button className="ucmp-track-btn" onClick={() => setShowTrack(c)}>Track →</button>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -284,20 +370,33 @@ export default function UserComplaints() {
                       value={form.customCategory} onChange={e => handleChange('customCategory', e.target.value)} />
                   </div>
                 )}
-                <div className="ucmp-fg">
-                  <label>Priority</label>
-                  <div className="ucmp-priority-row">
-                    {['Low', 'Medium', 'High'].map(p => (
-                      <button key={p} type="button"
-                        className={`ucmp-priority-btn ucmp-priority-btn--${p.toLowerCase()}${form.priority === p ? ' ucmp-priority-btn--active' : ''}`}
-                        onClick={() => handleChange('priority', p)}>
-                        <span className="ucmp-priority-btn__dot" />{p}
-                      </button>
-                    ))}
+                {form.category === 'Other' ? (
+                  <div className="ucmp-fg">
+                    <label>Priority <span>*</span></label>
+                    <div className="ucmp-priority-row">
+                      {OTHER_PRIORITY_OPTIONS.map(p => (
+                        <button key={p.value} type="button"
+                          className={`ucmp-priority-btn ucmp-priority-btn--${p.label.toLowerCase()}${form.priority === p.value ? ' ucmp-priority-btn--active' : ''}`}
+                          onClick={() => handleChange('priority', p.value)}>
+                          <span className="ucmp-priority-btn__dot" />{p.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="ucmp-fg">
+                    <label>Assigned Priority</label>
+                    <div className="ucmp-priority-readonly">
+                      <span
+                        className="ucmp-priority__dot"
+                        style={{ background: PRIORITY_DOT[getDefaultPriority(form.category)] || PRIORITY_DOT.Normal }}
+                      />
+                      {form.category ? getDefaultPriority(form.category) : 'Select a category first'}
+                    </div>
+                  </div>
+                )}
                 <div className="ucmp-fg">
-                  <label>Location <span>(optional)</span></label>
+                  <label>Location <span>*</span></label>
                   <input type="text" value={form.location} onChange={e => handleChange('location', e.target.value)}
                     placeholder="e.g. Purok 4, Narra St." />
                 </div>

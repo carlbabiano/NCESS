@@ -19,7 +19,7 @@ const STATUS_META = {
 const PRIORITY_META = {
   High:   { dot: '#ef4444' },
   Medium: { dot: '#f59e0b' },
-  Low:    { dot: '#22c55e' },
+  Normal: { dot: '#22c55e' },
 };
 
 const STATUS_FILTERS = ['All', 'Pending', 'In Progress', 'Resolved', 'Escalated'];
@@ -589,7 +589,7 @@ export default function AdminComplaints() {
                     <div className="cmp-form-group">
                       <label className="cmp-form-label">Priority Level</label>
                       <div className="cmp-priority-row">
-                        {['Low', 'Medium', 'High'].map(p => (
+                        {['Normal', 'Medium', 'High'].map(p => (
                           <button key={p} type="button"
                             className={`cmp-priority-btn cmp-priority-btn--${p.toLowerCase()}${form.priority === p ? ' cmp-priority-btn--active' : ''}`}
                             onClick={() => handleChange('priority', p)}>
