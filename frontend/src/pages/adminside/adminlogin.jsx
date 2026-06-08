@@ -92,19 +92,7 @@ export default function AdminLogin() {
           {/* Divider line */}
           <div className="alog-left__divider" />
 
-          {/* Stats */}
-          <div className="alog-stats">
-            {[
-              { value:'12,482', label:'Registered Residents' },
-              { value:'98%',    label:'Complaint Resolution' },
-              { value:'24/7',   label:'System Uptime'        },
-            ].map(s => (
-              <div className="alog-stat" key={s.label}>
-                <p className="alog-stat__value">{s.value}</p>
-                <p className="alog-stat__label">{s.label}</p>
-              </div>
-            ))}
-          </div>
+          
         </div>
       </div>
 

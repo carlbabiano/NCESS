@@ -296,14 +296,7 @@ export default function LandingPage() {
               </button>
             </div>
 
-            <div className="lp-hero__stats">
-              {[['12,482','Registered Residents'],['98%','Resolution Rate'],['24/7','System Uptime']].map(([v,l]) => (
-                <div key={l}>
-                  <div className="lp-hero__stat-value">{v}</div>
-                  <div className="lp-hero__stat-label">{l}</div>
-                </div>
-              ))}
-            </div>
+            
           </div>
 
           {/* Right — Seals */}
