@@ -41,18 +41,41 @@ const __dirname  = path.dirname(__filename);
 const app        = express();
 const httpServer = createServer(app);
 
+const defaultAllowedOrigins = [
+  "http://localhost:5173",
+  "http://192.168.100.12:5173",
+  "https://ncess.vercel.app",
+  "https://ncess.online",
+  "https://www.ncess.online",
+];
+
+const envAllowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.CLIENT_URL,
+  process.env.CORS_ORIGINS,
+]
+  .filter(Boolean)
+  .flatMap((value) => value.split(","))
+  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envAllowedOrigins])];
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ""))) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS blocked origin: ${origin}`));
+  },
+  credentials: true,
+};
+
 // ── Socket.io ────────────────────────────────────────────────────────────────
 const io = new Server(httpServer, {
-  cors: {
-    origin: [
-      "http://localhost:5173",
-      "http://192.168.100.12:5173",
-      "https://ncess.vercel.app",
-      "https://ncess.online",
-      "https://www.ncess.online"
-    ],
-    credentials: true
-  },
+  cors: corsOptions,
 });
 
 // Auth middleware for Socket.io
@@ -164,16 +187,7 @@ io.on("connection", (socket) => {
 });
 
 // ── Express Middleware ────────────────────────────────────────────────────────
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://192.168.100.12:5173",
-    "https://ncess.vercel.app",
-    "https://ncess.online",
-    "https://www.ncess.online"
-  ],
-  credentials: true
-}));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
