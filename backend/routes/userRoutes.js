@@ -411,15 +411,16 @@ router.post("/user/forgot-password", async (req, res) => {
     console.log("[Password Reset] Saved user resetCode:", savedUser.resetCode);
     console.log("[Password Reset] Saved user resetCodeExpiry:", savedUser.resetCodeExpiry);
 
-    // Send password reset email
-    const emailSent = await sendPasswordResetEmail(user.email, resetCode);
-
-    if (!emailSent) {
-      console.warn("[Password Reset] Email service unavailable, but code generated successfully");
-    }
-
     res.status(200).json({ 
       message: "If an account exists with this email, a password reset code will be sent." 
+    });
+
+    sendPasswordResetEmail(user.email, resetCode).then(emailResult => {
+      if (!emailResult.ok) {
+        console.warn("[Password Reset] Email service unavailable, but code generated successfully:", emailResult.error);
+      }
+    }).catch(error => {
+      console.error("[Password Reset] Background email send error:", error.message);
     });
   } catch (error) {
     console.error("Forgot password error:", error);

@@ -2,15 +2,36 @@ import nodemailer from 'nodemailer';
 
 // Initialize transporter based on environment
 let transporter;
+const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS) || 7000;
+
+const cleanCredential = value => String(value || '').replace(/\s+/g, '');
+const gmailEmail = () => String(process.env.GMAIL_EMAIL || '').trim();
+const smtpEmail = () => String(process.env.SMTP_EMAIL || '').trim();
+const senderEmail = () => gmailEmail() || smtpEmail();
+
+const withTimeout = (promise, timeoutMs, timeoutMessage) => {
+  let timeoutId;
+
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+};
 
 export const initializeEmailService = () => {
   if (process.env.EMAIL_SERVICE === 'gmail') {
     // For Gmail with App Password
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      connectionTimeout: EMAIL_TIMEOUT_MS,
+      greetingTimeout: EMAIL_TIMEOUT_MS,
+      socketTimeout: EMAIL_TIMEOUT_MS,
       auth: {
-        user: process.env.GMAIL_EMAIL,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: gmailEmail(),
+        pass: cleanCredential(process.env.GMAIL_APP_PASSWORD),
       },
     });
   } else if (process.env.SMTP_HOST) {
@@ -19,9 +40,12 @@ export const initializeEmailService = () => {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === 'true', // true for 465, false for 587
+      connectionTimeout: EMAIL_TIMEOUT_MS,
+      greetingTimeout: EMAIL_TIMEOUT_MS,
+      socketTimeout: EMAIL_TIMEOUT_MS,
       auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASSWORD,
+        user: smtpEmail(),
+        pass: cleanCredential(process.env.SMTP_PASSWORD),
       },
     });
   } else {
@@ -36,12 +60,13 @@ export const initializeEmailService = () => {
 export const sendPasswordResetEmail = async (userEmail, resetCode) => {
   if (!transporter) {
     console.warn(`[EmailService] Email not sent to ${userEmail} - service not configured`);
-    return false;
+    return { ok: false, error: 'Email service is not configured' };
   }
 
   try {
+    const fromAddress = senderEmail();
     const mailOptions = {
-      from: process.env.GMAIL_EMAIL || process.env.SMTP_EMAIL,
+      from: fromAddress ? `"NCESS" <${fromAddress}>` : undefined,
       to: userEmail,
       subject: 'Password Reset Code - NCESS',
       html: `
@@ -101,13 +126,20 @@ export const sendPasswordResetEmail = async (userEmail, resetCode) => {
       text: `Password Reset Code\n\nYour password reset code is: ${resetCode}\n\nThis code is valid for 15 minutes.\n\nIf you didn't request this, please ignore this email.`,
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    const info = await withTimeout(
+      transporter.sendMail(mailOptions),
+      EMAIL_TIMEOUT_MS + 2000,
+      `Email send timed out after ${EMAIL_TIMEOUT_MS + 2000}ms`
+    );
     console.log(`[EmailService] ✓ Password reset code sent to ${userEmail}`);
     console.log(`[EmailService] Message ID: ${info.messageId}`);
-    return true;
+    console.log(`[EmailService] Accepted: ${(info.accepted || []).join(', ') || 'none'}`);
+    console.log(`[EmailService] Rejected: ${(info.rejected || []).join(', ') || 'none'}`);
+    console.log(`[EmailService] SMTP response: ${info.response || 'none'}`);
+    return { ok: true, info };
   } catch (error) {
     console.error(`[EmailService] Error sending email to ${userEmail}:`, error.message);
-    return false;
+    return { ok: false, error: error.message };
   }
 };
 

@@ -5,6 +5,18 @@ import bagongpilipinaslogo from '../../assets/bagongpilipinas.png';
 import olongapologo        from '../../assets/lungsodngolongapo.png';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL;
+const REQUEST_TIMEOUT_MS = 60000;
+
+const fetchWithTimeout = async (url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
 // Sidebar-style SVG icons — same lucide paths used in usersidebar.jsx
 const FEATURES = [
@@ -556,7 +568,7 @@ export default function UserLogin() {
 
     setForgotLoading(true);
     try {
-      const res = await fetch(`${API_URL}/user/forgot-password`, {
+      const res = await fetchWithTimeout(`${API_URL}/user/forgot-password`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ email: forgotEmail.trim() }),
@@ -572,8 +584,12 @@ export default function UserLogin() {
       }
 
       setForgotError(data.message || 'Unable to process forgot password request.');
-    } catch {
-      setForgotError('Unable to connect to the server. Please try again.');
+    } catch (err) {
+      setForgotError(
+        err.name === 'AbortError'
+          ? 'The server took too long to send the reset code. Please try again in a moment.'
+          : 'Unable to connect to the server. Please try again.'
+      );
     } finally {
       setForgotLoading(false);
     }
