@@ -51,8 +51,11 @@ const profileChangeRequestSchema = new mongoose.Schema({
   residentEmail: { type: String, default: '' },
   currentData:   { type: Object, default: {} },
   requestedData: { type: Object, required: true },
+  fieldReviews:  { type: Object, default: {} },
+  proofDocumentUrl: { type: String, default: '' },
+  proofDocumentName: { type: String, default: '' },
   note:          { type: String, default: '' },
-  status:        { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  status:        { type: String, enum: ['pending', 'approved', 'denied', 'rejected', 'partially_approved'], default: 'pending' },
   reviewedBy:    { type: Object, default: null },
   reviewedAt:    { type: Date, default: null },
 }, { timestamps: true });
@@ -179,6 +182,7 @@ router.post("/usersignup/upload-document", (req, res, next) => {
       message: "Document uploaded successfully",
       url: imageUrl,
       filename: req.file.filename,
+      originalName: req.file.originalname || '',
     });
   } catch (error) {
     console.error("Document upload error:", error);
@@ -925,6 +929,10 @@ const PROFILE_CHANGE_FIELDS = [
   'educationalAttainment',
 ];
 
+const PROFILE_PROOF_REQUIRED_FIELDS = [
+  'firstName', 'middleName', 'lastName', 'birthdate', 'sex', 'civilStatus', 'nationality',
+];
+
 function pickProfileFields(source = {}) {
   return PROFILE_CHANGE_FIELDS.reduce((acc, key) => {
     if (source[key] !== undefined) acc[key] = source[key];
@@ -945,6 +953,59 @@ function pickChangedProfileFields(currentData = {}, requestedData = {}) {
   }, {});
 }
 
+function requiresProfileProof(requestedData = {}) {
+  return PROFILE_PROOF_REQUIRED_FIELDS.some(key => requestedData[key] !== undefined);
+}
+
+function adminReviewInfo(admin = {}) {
+  return {
+    adminId: admin.id,
+    email: admin.email,
+    firstName: admin.firstName,
+    lastName: admin.lastName,
+    role: admin.adminRole,
+  };
+}
+
+function normalizeProfileReviewStatus(status) {
+  return status === 'rejected' ? 'denied' : status;
+}
+
+function getFinalProfileRequestStatus(fieldReviews = {}) {
+  const statuses = Object.values(fieldReviews).map(review => review?.status).filter(Boolean);
+  if (statuses.length === 0) return 'pending';
+  if (statuses.every(status => status === 'approved')) return 'approved';
+  if (statuses.every(status => status === 'denied')) return 'denied';
+  return 'partially_approved';
+}
+
+async function validateAndApplyProfileFields({ user, fields }) {
+  const profileFields = pickProfileFields(fields);
+
+  if (profileFields.email !== undefined) {
+    const requestedEmail = String(profileFields.email || '').trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(requestedEmail)) {
+      const error = new Error('Requested email address is invalid.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const emailOwner = await User.findOne({ email: requestedEmail, _id: { $ne: user._id } });
+    if (emailOwner) {
+      const error = new Error('Email address is already used by another resident.');
+      error.statusCode = 409;
+      throw error;
+    }
+
+    profileFields.email = requestedEmail;
+  }
+
+  Object.assign(user, profileFields);
+  await user.save();
+  return profileFields;
+}
+
 router.post("/profile-change-requests", requireUser, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -955,6 +1016,12 @@ router.post("/profile-change-requests", requireUser, async (req, res) => {
     const requestedData = pickChangedProfileFields(currentProfileData, submittedData);
     if (Object.keys(requestedData).length === 0)
       return res.status(400).json({ message: 'Please change something before sending a request.' });
+
+    const proofDocumentUrl = String(req.body.proofDocumentUrl || '').trim();
+    const proofDocumentName = String(req.body.proofDocumentName || '').trim();
+    if (requiresProfileProof(requestedData) && !proofDocumentUrl) {
+      return res.status(400).json({ message: 'Please upload a valid ID or supporting document for identity detail changes.' });
+    }
 
     if (requestedData.email !== undefined) {
       const requestedEmail = String(requestedData.email || '').trim();
@@ -984,6 +1051,8 @@ router.post("/profile-change-requests", requireUser, async (req, res) => {
       residentEmail: user.email,
       currentData,
       requestedData,
+      proofDocumentUrl,
+      proofDocumentName,
       note: req.body.note || '',
     });
 
@@ -1008,8 +1077,9 @@ router.get("/profile-change-requests", requireAdmin, async (req, res) => {
 });
 
 router.patch("/profile-change-requests/:id", requireAdmin, async (req, res) => {
-  const { status } = req.body;
-  if (!['approved', 'rejected'].includes(status))
+  const { field } = req.body;
+  const status = normalizeProfileReviewStatus(req.body.status);
+  if (!['approved', 'denied'].includes(status))
     return res.status(400).json({ message: 'Invalid request status.' });
 
   try {
@@ -1020,51 +1090,118 @@ router.patch("/profile-change-requests/:id", requireAdmin, async (req, res) => {
 
     const previousStatus = request.status;
     let user = null;
-    if (status === 'approved') {
-      user = await User.findById(request.userId);
-      if (!user) return res.status(404).json({ message: 'Resident not found' });
+    let appliedFields = {};
+    const reviewer = adminReviewInfo(req.admin);
 
-      if (request.requestedData.email !== undefined) {
-        const requestedEmail = String(request.requestedData.email || '').trim();
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(requestedEmail))
-          return res.status(400).json({ message: 'Requested email address is invalid.' });
+    if (field) {
+      const requestedData = { ...(request.requestedData || {}) };
+      const currentData = { ...(request.currentData || {}) };
 
-        const emailOwner = await User.findOne({ email: requestedEmail, _id: { $ne: user._id } });
-        if (emailOwner)
-          return res.status(409).json({ message: 'Email address is already used by another resident.' });
-
-        request.requestedData.email = requestedEmail;
+      if (!PROFILE_CHANGE_FIELDS.includes(field) || requestedData[field] === undefined) {
+        return res.status(400).json({ message: 'Invalid or already reviewed profile field.' });
       }
 
-      Object.assign(user, pickProfileFields(request.requestedData));
-      await user.save();
+      if (status === 'approved') {
+        user = await User.findById(request.userId);
+        if (!user) return res.status(404).json({ message: 'Resident not found' });
+        appliedFields = await validateAndApplyProfileFields({
+          user,
+          fields: { [field]: requestedData[field] },
+        });
+        request.residentName = `${user.firstName} ${user.lastName}`.trim();
+        if (appliedFields.email !== undefined) {
+          request.residentEmail = appliedFields.email;
+        }
+      }
+
+      request.fieldReviews = {
+        ...(request.fieldReviews || {}),
+        [field]: {
+          status,
+          currentValue: currentData[field] ?? '',
+          requestedValue: status === 'approved' && appliedFields[field] !== undefined
+            ? appliedFields[field]
+            : requestedData[field],
+          reviewedAt: new Date(),
+          reviewedBy: reviewer,
+        },
+      };
+
+      delete requestedData[field];
+      delete currentData[field];
+      request.requestedData = requestedData;
+      request.currentData = currentData;
+      request.markModified('fieldReviews');
+      request.markModified('requestedData');
+      request.markModified('currentData');
+
+      if (Object.keys(requestedData).length === 0) {
+        request.status = getFinalProfileRequestStatus(request.fieldReviews);
+        request.reviewedAt = new Date();
+        request.reviewedBy = reviewer;
+      }
+    } else {
+      if (status === 'approved') {
+        user = await User.findById(request.userId);
+        if (!user) return res.status(404).json({ message: 'Resident not found' });
+        appliedFields = await validateAndApplyProfileFields({
+          user,
+          fields: request.requestedData || {},
+        });
+        request.residentName = `${user.firstName} ${user.lastName}`.trim();
+        if (appliedFields.email !== undefined) {
+          request.residentEmail = appliedFields.email;
+        }
+      }
+
+      const now = new Date();
+      const existingReviews = { ...(request.fieldReviews || {}) };
+      Object.keys(request.requestedData || {}).forEach(key => {
+        existingReviews[key] = {
+          status,
+          currentValue: request.currentData?.[key] ?? '',
+          requestedValue: status === 'approved' && appliedFields[key] !== undefined
+            ? appliedFields[key]
+            : request.requestedData[key],
+          reviewedAt: now,
+          reviewedBy: reviewer,
+        };
+      });
+
+      request.fieldReviews = existingReviews;
+      request.requestedData = {};
+      request.currentData = {};
+      request.status = status;
+      request.reviewedAt = now;
+      request.reviewedBy = reviewer;
+      request.markModified('fieldReviews');
+      request.markModified('requestedData');
+      request.markModified('currentData');
     }
 
-    request.status = status;
-    request.reviewedAt = new Date();
-    request.reviewedBy = {
-      adminId: req.admin.id,
-      email: req.admin.email,
-      firstName: req.admin.firstName,
-      lastName: req.admin.lastName,
-      role: req.admin.adminRole,
-    };
     await request.save();
 
-    const serializedRequest = { ...request.toObject(), previousStatus };
+    const serializedRequest = {
+      ...request.toObject(),
+      previousStatus,
+      reviewedField: field || '',
+      reviewedStatus: field ? status : '',
+    };
     req.app.get('io')?.to('admin_room').emit('profile_change_request_updated', serializedRequest);
-    req.app.get('io')?.to(`user_${request.userId}`).emit('profile_change_request_updated', serializedRequest);
+    req.app.get('io')?.to(`user_${request.userId}`).emit('profile_change_request_updated', {
+      request: serializedRequest,
+      user: user ? safeUser(user) : null,
+    });
     if (user) {
       req.app.get('io')?.to('admin_room').emit('resident_profile_updated', {
         user: safeUser(user),
         request: serializedRequest,
       });
     }
-    res.status(200).json({ message: `Request ${status}.`, request, user: user ? safeUser(user) : null });
+    res.status(200).json({ message: field ? `Field ${status}.` : `Request ${status}.`, request, user: user ? safeUser(user) : null });
   } catch (err) {
     console.error('Review profile change request error:', err);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(err.statusCode || 500).json({ message: err.statusCode ? err.message : 'Internal server error' });
   }
 });
 

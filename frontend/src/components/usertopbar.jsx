@@ -27,6 +27,32 @@ const EDUCATIONAL_ATTAINMENT_OPTIONS = [
   'Postgraduate',
 ];
 
+const PROFILE_CHANGE_LABELS = {
+  firstName: 'First Name',
+  middleName: 'Middle Name',
+  lastName: 'Last Name',
+  birthdate: 'Date of Birth',
+  sex: 'Sex',
+  civilStatus: 'Civil Status',
+  nationality: 'Nationality',
+  contactNumber: 'Mobile Number',
+  email: 'Email Address',
+  homeAddress: 'Home Address',
+  purok: 'Purok',
+  residencyStatus: 'Residency Status',
+  lengthOfStay: 'Length of Stay',
+  voterStatus: 'Voter Status',
+  householdId: 'Household / Family ID',
+  emergencyContactName: 'Emergency Contact Name',
+  emergencyContactNumber: 'Emergency Contact Number',
+  occupation: 'Occupation',
+  educationalAttainment: 'Educational Attainment',
+};
+
+const PROFILE_PROOF_REQUIRED_FIELDS = [
+  'firstName', 'middleName', 'lastName', 'birthdate', 'sex', 'civilStatus', 'nationality',
+];
+
 function loadNotifs() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
   catch { return []; }
@@ -232,6 +258,25 @@ function NotificationIcon({ kind, type }) {
     );
   }
 
+  if (kind === 'profile_change') {
+    if (type === 'approved') {
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M8 12l3 3 5-6"/>
+        </svg>
+      );
+    }
+
+    return (
+      <svg {...iconProps}>
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M15 9l-6 6"/>
+        <path d="M9 9l6 6"/>
+      </svg>
+    );
+  }
+
   return (
     <svg {...iconProps}>
       <path d="M6 3h9l3 3v15H6z"/>
@@ -245,49 +290,57 @@ function NotificationIcon({ kind, type }) {
 // ── Read stored user and map signup field names → topbar field names ─────────
 // userlogin.jsx saves the full user object returned by /userlogin as JSON
 // under the key "user" in localStorage (remember-me) or sessionStorage.
+function normalizeUserProfile(u = {}) {
+  const addressParts = (u.homeAddress || '').split(',').map(s => s.trim());
+  const houseNo = addressParts[0] || '';
+  const street  = addressParts.slice(1).join(', ') || u.homeAddress || '';
+
+  return {
+    firstName:   u.firstName   || '',
+    middleName:  u.middleName  || '',
+    lastName:    u.lastName    || '',
+    // topbar uses "dateOfBirth"; signup stores "birthdate"
+    dateOfBirth: u.birthdate   || u.dateOfBirth || '',
+    sex:         u.sex         || '',
+    civilStatus: u.civilStatus || '',
+    nationality: u.nationality || '',
+    // topbar uses "mobile"; signup stores "contactNumber"
+    mobile:      u.contactNumber || u.mobile || '',
+    email:       u.email         || '',
+    houseNo,
+    street,
+    purok:           u.purok           || '',
+    residencyStatus: u.residencyStatus || '',
+    lengthOfStay:    u.lengthOfStay    || '',
+    voterStatus:     u.voterStatus     || '',
+    householdId:     u.householdId     || '',
+    idType:          u.idType          || '',
+    idNumber:        u.idNumber        || '',
+    emergencyContactName:   u.emergencyContactName   || '',
+    emergencyContactNumber: u.emergencyContactNumber || '',
+    occupation:             u.occupation             || '',
+    educationalAttainment:  u.educationalAttainment  || '',
+  };
+}
+
 function getStoredUser() {
   try {
     const raw =
       localStorage.getItem('user') || sessionStorage.getItem('user');
     if (!raw) return null;
-    const u = JSON.parse(raw);
-
-    // Map every field from the DB schema to the keys the topbar/modal expects.
-    // homeAddress from signup is stored as a single string; we split it here
-    // so existing modal fields (houseNo / street) stay populated sensibly.
-    const addressParts = (u.homeAddress || '').split(',').map(s => s.trim());
-    const houseNo = addressParts[0] || '';
-    const street  = addressParts.slice(1).join(', ') || u.homeAddress || '';
-
-    return {
-      firstName:   u.firstName   || '',
-      middleName:  u.middleName  || '',
-      lastName:    u.lastName    || '',
-      // topbar uses "dateOfBirth"; signup stores "birthdate"
-      dateOfBirth: u.birthdate   || u.dateOfBirth || '',
-      sex:         u.sex         || '',
-      civilStatus: u.civilStatus || '',
-      nationality: u.nationality || '',
-      // topbar uses "mobile"; signup stores "contactNumber"
-      mobile:      u.contactNumber || u.mobile || '',
-      email:       u.email         || '',
-      houseNo,
-      street,
-      purok:           u.purok           || '',
-      residencyStatus: u.residencyStatus || '',
-      lengthOfStay:    u.lengthOfStay    || '',
-      voterStatus:     u.voterStatus     || '',
-      householdId:     u.householdId     || '',
-      idType:          u.idType          || '',
-      // Fields not in signup form — default to empty so the modal shows "—"
-      idNumber:               u.idNumber               || '',
-      emergencyContactName:   u.emergencyContactName   || '',
-      emergencyContactNumber: u.emergencyContactNumber || '',
-      occupation:             u.occupation             || '',
-      educationalAttainment:  u.educationalAttainment  || '',
-    };
+    return normalizeUserProfile(JSON.parse(raw));
   } catch {
     return null;
+  }
+}
+
+function saveStoredUser(user) {
+  try {
+    const storage = localStorage.getItem('user') ? localStorage : sessionStorage;
+    const existing = JSON.parse(storage.getItem('user') || '{}');
+    storage.setItem('user', JSON.stringify({ ...existing, ...user }));
+  } catch {
+    /* ignore storage failures */
   }
 }
 
@@ -407,6 +460,26 @@ function getChangedProfileData(originalData, updatedData) {
     }
     return changes;
   }, {});
+}
+
+function getProofRequiredFields(changedData = {}) {
+  return PROFILE_PROOF_REQUIRED_FIELDS.filter(key => changedData[key] !== undefined);
+}
+
+async function uploadProfileProof(apiBase, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${apiBase}/usersignup/upload-document`, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || 'Failed to upload proof document.');
+  return {
+    url: data.url || '',
+    filename: file.name || data.originalName || 'Proof document',
+  };
 }
 
 function formatDate(dateStr) {
@@ -541,6 +614,7 @@ export default function UserTopbar({
   const [requestData,   setRequestData]   = useState(() => ({ ...formData }));
   const [requestBirthdateDisplay, setRequestBirthdateDisplay] = useState(() => birthdateDisplayFromIso(formData.dateOfBirth));
   const [requestNote,   setRequestNote]   = useState('');
+  const [requestProofFile, setRequestProofFile] = useState(null);
   const [requestStatus, setRequestStatus] = useState({ type: '', message: '' });
   const [requestErrors, setRequestErrors] = useState({});
   const [requestSaving, setRequestSaving] = useState(false);
@@ -736,6 +810,36 @@ export default function UserTopbar({
       setChatUnreadLoaded(true);
       setChatUnreadTotal(count);
       if (count > 0) upsertChatNotif(setNotifs, count, count > loadChatUnreadSeen());
+    });
+
+    socket.on('profile_change_request_updated', (payload) => {
+      const request = payload?.request || payload;
+      const updatedUser = payload?.user;
+      const reviewedField = request?.reviewedField;
+      const reviewedStatus = request?.reviewedStatus || request?.fieldReviews?.[reviewedField]?.status || '';
+
+      if (reviewedField && reviewedStatus) {
+        const approved = reviewedStatus === 'approved';
+        const label = PROFILE_CHANGE_LABELS[reviewedField] || reviewedField;
+        pushNotif(setNotifs, `profile-${request._id}-${reviewedField}-${reviewedStatus}-${request.updatedAt || Date.now()}`, {
+          kind: 'profile_change',
+          type: reviewedStatus,
+          color: approved ? '#16a34a' : '#dc2626',
+          label: approved ? 'Profile Update Approved' : 'Profile Update Denied',
+          title: label,
+          body: approved
+            ? `${label} was approved and applied to your profile.`
+            : `${label} change was denied by the barangay admin.`,
+        });
+      }
+
+      if (!updatedUser) return;
+
+      saveStoredUser(updatedUser);
+      const normalized = normalizeUserProfile(updatedUser);
+      setProfileBaseline(prev => ({ ...prev, ...normalized }));
+      setFormData(prev => ({ ...prev, ...normalized }));
+      setRequestData(prev => ({ ...prev, ...normalized }));
     });
 
     return () => socket.disconnect();
@@ -1068,6 +1172,7 @@ export default function UserTopbar({
     setRequestData({ ...formData });
     setRequestBirthdateDisplay(birthdateDisplayFromIso(formData.dateOfBirth));
     setRequestNote('');
+    setRequestProofFile(null);
     setRequestStatus({ type: '', message: '' });
     setRequestErrors({});
     setRequestSent(false);
@@ -1077,6 +1182,7 @@ export default function UserTopbar({
   function closeRequestPanel() {
     setRequestOpen(false);
     setRequestSent(false);
+    setRequestProofFile(null);
     setRequestStatus({ type: '', message: '' });
     setRequestErrors({});
   }
@@ -1084,6 +1190,7 @@ export default function UserTopbar({
   function closeRequestSuccess() {
     setRequestOpen(false);
     setRequestSent(false);
+    setRequestProofFile(null);
     setRequestStatus({ type: '', message: '' });
     setRequestErrors({});
     setModalOpen(false);
@@ -1133,6 +1240,15 @@ export default function UserTopbar({
       return;
     }
 
+    const proofRequiredFields = getProofRequiredFields(changedData);
+    if (proofRequiredFields.length > 0 && !requestProofFile) {
+      setRequestStatus({
+        type: 'error',
+        message: `Please upload a valid ID or supporting document for ${proofRequiredFields.map(key => PROFILE_CHANGE_LABELS[key] || key).join(', ')}.`,
+      });
+      return;
+    }
+
     const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
     const apiBase = import.meta.env.VITE_BACKEND_URL || '';
     if (!token || !apiBase) {
@@ -1143,12 +1259,19 @@ export default function UserTopbar({
     setRequestSaving(true);
     setRequestStatus({ type: '', message: '' });
     try {
+      let proofDocument = { url: '', filename: '' };
+      if (proofRequiredFields.length > 0 && requestProofFile) {
+        proofDocument = await uploadProfileProof(apiBase, requestProofFile);
+      }
+
       const res = await fetch(`${apiBase}/profile-change-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           requestedData: changedData,
           note: requestNote,
+          proofDocumentUrl: proofDocument.url,
+          proofDocumentName: proofDocument.filename,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1186,11 +1309,23 @@ export default function UserTopbar({
       return;
     }
 
+    if (n.kind === 'profile_change') {
+      markBellDotSeen();
+      markChatUnreadSeen(chatUnreadTotal);
+      setBellOpen(false);
+      setPanelOpen(false);
+      openModal();
+      return;
+    }
+
     openNotificationPath('/userannouncements', { announcementId: n._id || '' });
   }
 
   const fullName     = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(' ') || 'Resident';
   const shortAddress = [formData.purok, formData.street].filter(Boolean).join(', ') || 'New Cabalan';
+  const requestPreviewChanges = getChangedProfileData(profileBaseline, requestData);
+  const requestProofFields = getProofRequiredFields(requestPreviewChanges);
+  const requestNeedsProof = requestProofFields.length > 0;
 
   // Age calc
   const age = (() => {
@@ -1406,6 +1541,29 @@ export default function UserTopbar({
                       {n.resolutionNote && (
                         <p className="utb-notif-note">"{n.resolutionNote}"</p>
                       )}
+                    </div>
+                  </button>
+                );
+              }
+
+              if (n.kind === 'profile_change') {
+                return (
+                  <button
+                    key={n.uid}
+                    type="button"
+                    className={`utb-notif-item utb-notif-item--icon${n.read ? '' : ' utb-notif-item--unread'}`}
+                    onClick={() => openNotification(n)}
+                  >
+                    <div className="utb-notif-icon-wrap" style={{ background: n.color + '18', color: n.color }}>
+                      <NotificationIcon kind="profile_change" type={n.type} />
+                    </div>
+                    <div className="utb-notif-body">
+                      <div className="utb-notif-top">
+                        <span className="utb-notif-cat" style={{ background: n.color + '18', color: n.color }}>{n.label}</span>
+                        <span className="utb-notif-time">{fmtRelative(n.ts)}</span>
+                      </div>
+                      <p className="utb-notif-title">{n.title}</p>
+                      <p className="utb-notif-sub">{n.body}</p>
                     </div>
                   </button>
                 );
@@ -1783,6 +1941,25 @@ export default function UserTopbar({
                   rows={3}
                 />
               </label>
+
+              {requestNeedsProof && (
+                <div className="utb-proof-box">
+                  <div className="utb-proof-box__copy">
+                    <span>Valid ID / Proof Required</span>
+                    <p>
+                      Upload a valid ID or supporting document for {requestProofFields.map(key => PROFILE_CHANGE_LABELS[key] || key).join(', ')}.
+                    </p>
+                  </div>
+                  <label className="utb-proof-upload">
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={e => setRequestProofFile(e.target.files?.[0] || null)}
+                    />
+                    <span>{requestProofFile ? requestProofFile.name : 'Choose document'}</span>
+                  </label>
+                </div>
+              )}
 
             </div>
 

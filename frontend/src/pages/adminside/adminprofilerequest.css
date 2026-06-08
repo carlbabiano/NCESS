@@ -169,7 +169,7 @@
 }
 
 .apr-modal {
-  width: 680px;
+  width: 920px;
   max-width: calc(100vw - 48px);
   max-height: calc(100vh - 48px);
   background: #fff;
@@ -241,16 +241,146 @@
   line-height: 1.5;
 }
 
+.apr-proof {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+}
+
+.apr-proof span {
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.apr-proof p {
+  margin: 3px 0 0;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.apr-proof button {
+  flex-shrink: 0;
+  color: #fff;
+  background: #2563eb;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.apr-doc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(17,24,39,0.62);
+  backdrop-filter: blur(6px);
+}
+
+.apr-doc-modal {
+  width: min(980px, calc(100vw - 48px));
+  height: min(720px, calc(100vh - 48px));
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 28px 72px rgba(0,0,0,0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.apr-doc-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.apr-doc-modal__header h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 16px;
+}
+
+.apr-doc-modal__header p {
+  margin: 3px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.apr-doc-modal__body {
+  flex: 1;
+  min-height: 0;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.apr-doc-modal__body img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.apr-doc-modal__body iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+}
+
 .apr-change-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+.apr-change-list__head,
 .apr-change-row {
   display: grid;
-  grid-template-columns: 190px 1fr;
+  grid-template-columns: 160px minmax(0, 1fr) minmax(0, 1fr) 150px;
   gap: 14px;
+  align-items: center;
+}
+
+.apr-change-list__head {
+  padding: 0 12px 2px;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.apr-change-list__head span:last-child {
+  text-align: center;
+}
+
+.apr-change-row {
   padding: 12px;
   border: 1px solid #f3f4f6;
   border-radius: 10px;
@@ -262,27 +392,49 @@
   font-weight: 700;
 }
 
-.apr-change-row__old,
-.apr-change-row__new {
+.apr-change-row__value {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.apr-change-row__value p {
   margin: 0;
   overflow-wrap: anywhere;
   font-size: 13px;
   line-height: 1.45;
 }
 
-.apr-change-row__old {
+.apr-change-row__value--old p {
   color: #9ca3af;
   text-decoration: line-through;
 }
 
-.apr-change-row__new {
-  margin-top: 4px;
+.apr-change-row__value--new {
+  background: #eff6ff;
+}
+
+.apr-change-row__value--new p {
   color: #111827;
   font-weight: 700;
 }
 
+.apr-change-row__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
 .apr-btn {
   padding: 9px 16px;
+}
+
+.apr-btn--compact {
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 12px;
+  white-space: nowrap;
 }
 
 .apr-btn--ghost {
@@ -334,5 +486,31 @@
 
   .apr-change-row {
     grid-template-columns: 1fr;
+  }
+
+  .apr-change-list__head {
+    display: none;
+  }
+
+  .apr-change-row__actions {
+    flex-direction: row;
+  }
+
+  .apr-change-row__actions .apr-btn {
+    flex: 1;
+  }
+
+  .apr-proof {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .apr-proof button {
+    text-align: center;
+  }
+
+  .apr-doc-modal {
+    width: calc(100vw - 28px);
+    height: calc(100vh - 28px);
   }
 }

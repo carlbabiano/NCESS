@@ -887,6 +887,62 @@ select.utb-field-input {
   padding-right: 42px;
 }
 .utb-request-field--note { margin-top: 4px; }
+.utb-proof-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 13px 14px;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+}
+.utb-proof-box__copy {
+  min-width: 0;
+}
+.utb-proof-box__copy span {
+  display: block;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.utb-proof-box__copy p {
+  margin: 4px 0 0;
+  color: #374151;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.utb-proof-upload {
+  flex-shrink: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 220px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1.5px solid #93c5fd;
+  background: #fff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.utb-proof-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.utb-proof-upload span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .utb-request-actions {
   display: flex;
   align-items: center;
@@ -1150,5 +1206,13 @@ select.utb-field-input {
   .utb-notif-panel {
     right: 8px;
     width: 290px;
+  }
+  .utb-proof-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .utb-proof-upload {
+    max-width: none;
+    width: 100%;
   }
 }

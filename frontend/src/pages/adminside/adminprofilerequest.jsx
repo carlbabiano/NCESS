@@ -58,19 +58,47 @@ function valueText(value) {
   return value === undefined || value === null || value === '' ? '-' : String(value);
 }
 
+function proofDocumentLabel(request) {
+  const name = String(request?.proofDocumentName || '').trim();
+  if (!name || name.includes('/') || name.startsWith('ebrgy_')) return 'Submitted valid ID / proof document';
+  return name;
+}
+
+function isImageProofDocument(request) {
+  const source = `${request?.proofDocumentName || ''} ${request?.proofDocumentUrl || ''}`.toLowerCase();
+  return /\.(png|jpe?g|gif|webp|bmp|svg)(?:$|[?#\s])/.test(source);
+}
+
+function loadingKey(requestId, field, status) {
+  return `${requestId}:${field}:${status}`;
+}
+
 function RequestModal({ request, onClose, onReview, actionLoading, canEdit }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    setPreviewOpen(false);
+  }, [request?._id]);
+
   if (!request) return null;
   const rows = Object.keys(request.requestedData || {});
+  const proofLabel = proofDocumentLabel(request);
+  const proofIsImage = isImageProofDocument(request);
+
+  function closeModal() {
+    setPreviewOpen(false);
+    onClose();
+  }
 
   return (
-    <div className="apr-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="apr-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
       <div className="apr-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
         <div className="apr-modal__header">
           <div>
             <h2>Profile Update Request</h2>
             <p>{request.residentName || request.residentEmail} - {formatDate(request.createdAt)}</p>
           </div>
-          <button className="apr-icon-btn" type="button" onClick={onClose} aria-label="Close">
+          <button className="apr-icon-btn" type="button" onClick={closeModal} aria-label="Close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
@@ -79,43 +107,87 @@ function RequestModal({ request, onClose, onReview, actionLoading, canEdit }) {
 
         <div className="apr-modal__body">
           {request.note && <p className="apr-note">{request.note}</p>}
+          {request.proofDocumentUrl && (
+            <div className="apr-proof">
+              <div>
+                <span>Valid ID / Proof Document</span>
+                <p>{proofLabel}</p>
+              </div>
+              <button type="button" onClick={() => setPreviewOpen(true)}>
+                View Document
+              </button>
+            </div>
+          )}
           <div className="apr-change-list">
+            <div className="apr-change-list__head">
+              <span>Information</span>
+              <span>Previous Information</span>
+              <span>Requested Change</span>
+              {canEdit && <span>Decision</span>}
+            </div>
             {rows.map(key => (
               <div className="apr-change-row" key={key}>
                 <span className="apr-change-row__label">{CHANGE_LABELS[key] || key}</span>
-                <div className="apr-change-row__values">
-                  <p className="apr-change-row__old">{valueText(request.currentData?.[key])}</p>
-                  <p className="apr-change-row__new">{valueText(request.requestedData?.[key])}</p>
+                <div className="apr-change-row__value apr-change-row__value--old">
+                  <p>{valueText(request.currentData?.[key])}</p>
                 </div>
+                <div className="apr-change-row__value apr-change-row__value--new">
+                  <p>{valueText(request.requestedData?.[key])}</p>
+                </div>
+                {canEdit && (
+                  <div className="apr-change-row__actions">
+                    <button
+                      className="apr-btn apr-btn--danger apr-btn--compact"
+                      type="button"
+                      onClick={() => onReview(request._id, key, 'rejected')}
+                      disabled={!!actionLoading}
+                    >
+                      {actionLoading === loadingKey(request._id, key, 'rejected') ? 'Denying...' : 'Deny'}
+                    </button>
+                    <button
+                      className="apr-btn apr-btn--primary apr-btn--compact"
+                      type="button"
+                      onClick={() => onReview(request._id, key, 'approved')}
+                      disabled={!!actionLoading}
+                    >
+                      {actionLoading === loadingKey(request._id, key, 'approved') ? 'Applying...' : 'Approve & Apply'}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
 
         <div className="apr-modal__footer">
-          <button className="apr-btn apr-btn--ghost" type="button" onClick={onClose}>Close</button>
-          {canEdit && (
-            <>
-              <button
-                className="apr-btn apr-btn--danger"
-                type="button"
-                onClick={() => onReview(request._id, 'rejected')}
-                disabled={!!actionLoading}
-              >
-                {actionLoading === 'rejected' ? 'Rejecting...' : 'Reject'}
-              </button>
-              <button
-                className="apr-btn apr-btn--primary"
-                type="button"
-                onClick={() => onReview(request._id, 'approved')}
-                disabled={!!actionLoading}
-              >
-                {actionLoading === 'approved' ? 'Approving...' : 'Approve & Apply'}
-              </button>
-            </>
-          )}
+          <button className="apr-btn apr-btn--ghost" type="button" onClick={closeModal}>Close</button>
         </div>
       </div>
+
+      {previewOpen && request.proofDocumentUrl && (
+        <div className="apr-doc-overlay" onClick={() => setPreviewOpen(false)}>
+          <div className="apr-doc-modal" role="dialog" aria-modal="true" aria-label="Proof document preview" onClick={e => e.stopPropagation()}>
+            <div className="apr-doc-modal__header">
+              <div>
+                <h3>Proof Document</h3>
+                <p>{proofLabel}</p>
+              </div>
+              <button className="apr-icon-btn" type="button" onClick={() => setPreviewOpen(false)} aria-label="Close document preview">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="apr-doc-modal__body">
+              {proofIsImage ? (
+                <img src={request.proofDocumentUrl} alt={proofLabel} />
+              ) : (
+                <iframe src={request.proofDocumentUrl} title={proofLabel} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -186,7 +258,10 @@ export default function AdminProfileRequest() {
         }
         return prev.filter(item => item._id !== request._id);
       });
-      setSelected(prev => prev?._id === request._id && request.status !== 'pending' ? null : prev);
+      setSelected(prev => {
+        if (prev?._id !== request._id) return prev;
+        return request.status === 'pending' ? request : null;
+      });
     });
 
     return () => socket.disconnect();
@@ -197,18 +272,19 @@ export default function AdminProfileRequest() {
     setTimeout(() => setToast(''), 3500);
   }
 
-  async function reviewRequest(requestId, status) {
-    setActionLoading(status);
+  async function reviewRequest(requestId, field, status) {
+    setActionLoading(loadingKey(requestId, field, status));
     try {
       const res = await fetch(`${API_URL}/profile-change-requests/${requestId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAdminToken()}` },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, field }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Action failed.');
-      setSelected(null);
-      showToast(status === 'approved' ? 'Profile update approved and applied.' : 'Profile update request rejected.');
+      setSelected(data.request?.status === 'pending' ? data.request : null);
+      const label = CHANGE_LABELS[field] || field;
+      showToast(status === 'approved' ? `${label} approved and applied.` : `${label} denied.`);
       await fetchRequests();
     } catch (err) {
       showToast(err.message || 'Action failed. Please try again.');
