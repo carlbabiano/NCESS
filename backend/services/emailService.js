@@ -2,12 +2,13 @@ import nodemailer from 'nodemailer';
 
 // Initialize transporter based on environment
 let transporter;
-const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS) || 7000;
+const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS) || 15000; // Increased from 7s to 15s for Render
 
 const cleanCredential = value => String(value || '').replace(/\s+/g, '');
 const gmailEmail = () => String(process.env.GMAIL_EMAIL || '').trim();
 const smtpEmail = () => String(process.env.SMTP_EMAIL || '').trim();
 const senderEmail = () => gmailEmail() || smtpEmail();
+const gmailPort = () => Number(process.env.GMAIL_SMTP_PORT) || 465;
 
 const withTimeout = (promise, timeoutMs, timeoutMessage) => {
   let timeoutId;
@@ -22,14 +23,19 @@ const withTimeout = (promise, timeoutMs, timeoutMessage) => {
 export const initializeEmailService = () => {
   if (process.env.EMAIL_SERVICE === 'gmail') {
     // For Gmail with App Password
+    console.log('[EmailService] Initializing Gmail transporter');
+    console.log('[EmailService] Email:', gmailEmail());
+    console.log('[EmailService] App Password configured:', !!process.env.GMAIL_APP_PASSWORD);
     transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
+      port: gmailPort(),
+      secure: gmailPort() === 465,
       family: 4,
       connectionTimeout: EMAIL_TIMEOUT_MS,
       greetingTimeout: EMAIL_TIMEOUT_MS,
       socketTimeout: EMAIL_TIMEOUT_MS,
+      logger: true,
+      debug: true,
       auth: {
         user: gmailEmail(),
         pass: cleanCredential(process.env.GMAIL_APP_PASSWORD),

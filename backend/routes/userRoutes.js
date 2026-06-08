@@ -406,21 +406,22 @@ router.post("/user/forgot-password", async (req, res) => {
     const savedUser = await user.save();
 
     console.log("[Password Reset] Code saved for:", email);
-    console.log("[Password Reset] Reset code:", resetCode);
     console.log("[Password Reset] Reset code expiry:", resetCodeExpiry);
-    console.log("[Password Reset] Saved user resetCode:", savedUser.resetCode);
     console.log("[Password Reset] Saved user resetCodeExpiry:", savedUser.resetCodeExpiry);
 
-    res.status(200).json({ 
-      message: "If an account exists with this email, a password reset code will be sent." 
-    });
+    const emailResult = await sendPasswordResetEmail(user.email, resetCode);
+    if (!emailResult.ok) {
+      user.resetCode = '';
+      user.resetCodeExpiry = null;
+      await user.save();
+      console.warn("[Password Reset] Email service unavailable; reset code cleared:", emailResult.error);
+      return res.status(503).json({
+        message: "Unable to send the reset code right now. Please try again later."
+      });
+    }
 
-    sendPasswordResetEmail(user.email, resetCode).then(emailResult => {
-      if (!emailResult.ok) {
-        console.warn("[Password Reset] Email service unavailable, but code generated successfully:", emailResult.error);
-      }
-    }).catch(error => {
-      console.error("[Password Reset] Background email send error:", error.message);
+    res.status(200).json({
+      message: "If an account exists with this email, a password reset code will be sent."
     });
   } catch (error) {
     console.error("Forgot password error:", error);
