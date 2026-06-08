@@ -26,6 +26,7 @@ export const initializeEmailService = () => {
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
+      family: 4,
       connectionTimeout: EMAIL_TIMEOUT_MS,
       greetingTimeout: EMAIL_TIMEOUT_MS,
       socketTimeout: EMAIL_TIMEOUT_MS,
@@ -40,6 +41,7 @@ export const initializeEmailService = () => {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === 'true', // true for 465, false for 587
+      family: 4,
       connectionTimeout: EMAIL_TIMEOUT_MS,
       greetingTimeout: EMAIL_TIMEOUT_MS,
       socketTimeout: EMAIL_TIMEOUT_MS,
