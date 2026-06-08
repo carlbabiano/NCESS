@@ -244,6 +244,45 @@
 .cmp-table__view-btn:hover { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
 .cmp-table__delete-btn:hover { background: #fef2f2 !important; border-color: #fecaca !important; color: #ef4444 !important; }
 
+/* Grouped resident complaints */
+.cmp-table__row--group { background: #fff; }
+.cmp-group-toggle {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  border: none; background: transparent; padding: 0; text-align: left;
+  font-family: 'DM Sans', sans-serif; cursor: pointer; color: inherit;
+}
+.cmp-group-toggle__chevron {
+  width: 24px; height: 24px; border-radius: 8px; border: 1px solid #e5e7eb;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  transition: transform 0.15s, background 0.15s, border-color 0.15s;
+}
+.cmp-group-toggle__chevron svg { width: 13px; height: 13px; stroke: #6b7280; }
+.cmp-group-toggle__chevron--open { transform: rotate(90deg); background: #eff6ff; border-color: #bfdbfe; }
+.cmp-group-toggle__text { display: flex; flex-direction: column; min-width: 0; }
+.cmp-group-count { font-size: 12px; font-weight: 600; color: #2563eb; margin-top: 2px; }
+.cmp-group-status { font-size: 12.5px; font-weight: 600; color: #6b7280; white-space: nowrap; }
+.cmp-group-action {
+  font-size: 13px; font-weight: 600; color: #2563eb; background: none; border: none;
+  cursor: pointer; font-family: 'DM Sans', sans-serif; transition: color 0.15s; white-space: nowrap;
+}
+.cmp-group-action:hover { color: #1d4ed8; }
+.cmp-dropdown-row td { padding: 0; background: #f9fafb; }
+.cmp-complaint-list { display: flex; flex-direction: column; padding: 8px 12px 12px; }
+.cmp-complaint-item {
+  display: grid; grid-template-columns: minmax(180px, 1fr) 110px 132px 78px;
+  align-items: center; gap: 14px; padding: 12px 14px;
+  background: #fff; border: 1px solid #eef2f7; border-bottom: none;
+}
+.cmp-complaint-item:first-child { border-radius: 10px 10px 0 0; }
+.cmp-complaint-item:last-child { border-bottom: 1px solid #eef2f7; border-radius: 0 0 10px 10px; }
+.cmp-complaint-item:only-child { border-radius: 10px; }
+.cmp-complaint-item__main { min-width: 0; }
+.cmp-complaint-item__category {
+  font-size: 13.5px; font-weight: 600; color: #374151; margin: 0 0 3px;
+  overflow-wrap: anywhere;
+}
+.cmp-complaint-item__meta { font-size: 12px; color: #9ca3af; margin: 0; overflow-wrap: anywhere; }
+
 /* ─── Pagination ─────────────────────────────────── */
 .cmp-pagination {
   display: flex; align-items: center; justify-content: space-between;
@@ -530,6 +569,23 @@
   /* Action buttons cell */
   .cmp-table td:last-child { padding-top: 8px; border-top: 1px solid #f3f4f6; margin-top: 4px; justify-content: flex-end; gap: 8px; }
   .cmp-table td:last-child::before { display: none; }
+  .cmp-table__row--group td:first-child { border-bottom: none; margin-bottom: 0; }
+  .cmp-group-toggle { width: 100%; }
+  .cmp-group-status { white-space: normal; line-height: 1.4; }
+  .cmp-dropdown-row {
+    border: none; box-shadow: none; padding: 0; background: transparent; margin-bottom: 10px;
+  }
+  .cmp-dropdown-row td { display: block; padding: 0; }
+  .cmp-dropdown-row td:first-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .cmp-complaint-list { padding: 0; gap: 8px; }
+  .cmp-complaint-item {
+    grid-template-columns: 1fr; gap: 8px; padding: 12px;
+    border: 1px solid #e9ecef; border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .cmp-complaint-item:first-child,
+  .cmp-complaint-item:last-child,
+  .cmp-complaint-item:only-child { border-radius: 12px; }
 
   /* Footer / pagination */
   .cmp-footer       { padding: 12px 16px; font-size: 12px; }

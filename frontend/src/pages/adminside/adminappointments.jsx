@@ -653,11 +653,22 @@ export default function AdminAppointments() {
     return tb - ta;
   });
 
-  // Group by resident name, preserving sorted order
+  const getResidentGroupKey = (appt) => {
+    const userId = String(appt.userId || '').trim().toLowerCase();
+    if (userId) return `user:${userId}`;
+
+    const email = String(appt.residentEmail || '').trim().toLowerCase();
+    if (email) return `email:${email}`;
+
+    const resident = String(appt.resident || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return `name:${resident || appt._id}`;
+  };
+
+  // Group by resident, preserving sorted order
   const groupedResidents = (() => {
     const map = new Map();
     for (const appt of sortedAppointments) {
-      const key = appt.resident?.toLowerCase().trim() || appt._id;
+      const key = getResidentGroupKey(appt);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(appt);
     }
@@ -732,6 +743,30 @@ export default function AdminAppointments() {
       setDeleteTarget(null);
     }
   };
+
+  const renderAppointmentActions = (appt) => (
+    appt.status === 'Scheduled' && (
+      <div style={{ position: 'relative', display: 'inline-block' }}>
+        <button className="appt-table__dots-btn"
+          onClick={e => { e.stopPropagation(); toggleMenu(appt._id); }}>
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+            <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+          </svg>
+        </button>
+        {openMenu === appt._id && (
+          <DropdownPortal>
+            <button className="appt-dropdown__item appt-dropdown__item--cancel-action"
+              onClick={() => { setOpenMenu(null); requestAction(appt, 'Cancelled'); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="14" height="14">
+                <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+              </svg>
+              Cancel Appointment
+            </button>
+          </DropdownPortal>
+        )}
+      </div>
+    )
+  );
 
   /* ── Modal helpers ── */
   const openModal  = () => {
@@ -951,13 +986,42 @@ export default function AdminAppointments() {
                         const primary = appts[0];
                         const extras  = appts.slice(1);
                         const isExpanded = expandedResidents.has(residentKey);
+                        const counts = {
+                          scheduled: appts.filter(a => a.status === 'Scheduled').length,
+                          closed: appts.filter(a => a.status === 'Closed').length,
+                          cancelled: appts.filter(a => a.status === 'Cancelled').length,
+                        };
                         return (
                           <React.Fragment key={residentKey}>
-                            <tr className="appt-table__row">
+                            <tr className={`appt-table__row${extras.length > 0 ? ' appt-table__row--group' : ''}`}>
                               <td className="appt-table__resident">
-                                <p className="appt-table__resident-name">{primary.resident}</p>
-                                {primary.residentEmail && (
-                                  <p className="appt-table__resident-email">{primary.residentEmail}</p>
+                                {extras.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    className="appt-group-toggle"
+                                    onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
+                                    aria-expanded={isExpanded}
+                                  >
+                                    <span className={`appt-group-toggle__chevron${isExpanded ? ' appt-group-toggle__chevron--open' : ''}`}>
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <polyline points="9 18 15 12 9 6" />
+                                      </svg>
+                                    </span>
+                                    <span className="appt-group-toggle__text">
+                                      <span className="appt-table__resident-name">{primary.resident}</span>
+                                      {primary.residentEmail && (
+                                        <span className="appt-table__resident-email">{primary.residentEmail}</span>
+                                      )}
+                                      <span className="appt-group-count">{appts.length} appointments booked</span>
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <>
+                                    <p className="appt-table__resident-name">{primary.resident}</p>
+                                    {primary.residentEmail && (
+                                      <p className="appt-table__resident-email">{primary.residentEmail}</p>
+                                    )}
+                                  </>
                                 )}
                               </td>
                               <td>
@@ -967,94 +1031,57 @@ export default function AdminAppointments() {
                                 </div>
                               </td>
                               <td className="appt-table__purpose">
-                                <div className="appt-table__purpose-row">
-                                  <span>{primary.purpose}</span>
-                                  {extras.length > 0 && (
-                                    <button className="appt-more-pill"
-                                      onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
-                                      aria-expanded={isExpanded}>
-                                      {isExpanded ? (
-                                        <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="11" height="11"><polyline points="18 15 12 9 6 15"/></svg>Collapse</>
-                                      ) : (
-                                        <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="11" height="11"><polyline points="6 9 12 15 18 9"/></svg>+{extras.length} more</>
-                                      )}
-                                    </button>
-                                  )}
-                                </div>
+                                {extras.length > 0 ? `Latest: ${primary.purpose}` : primary.purpose}
                               </td>
                               <td className="appt-table__menu-cell" onClick={e => e.stopPropagation()}>
-                                <span className={`appt-status-badge ${STATUS_META[primary.status]?.className || 'status--scheduled'}`}>
-                                  {STATUS_META[primary.status]?.label || primary.status}
-                                </span>
+                                {extras.length > 0 ? (
+                                  <span className="appt-group-status">
+                                    {counts.scheduled} scheduled · {counts.closed} closed · {counts.cancelled} cancelled
+                                  </span>
+                                ) : (
+                                  <span className={`appt-status-badge ${STATUS_META[primary.status]?.className || 'status--scheduled'}`}>
+                                    {STATUS_META[primary.status]?.label || primary.status}
+                                  </span>
+                                )}
                               </td>
                               <td className="appt-table__menu-cell" onClick={e => e.stopPropagation()}>
-                                {primary.status === 'Scheduled' && (
-                                  <div style={{ position: 'relative', display: 'inline-block' }}>
-                                    <button className="appt-table__dots-btn"
-                                      onClick={e => { e.stopPropagation(); toggleMenu(primary._id); }}>
-                                      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                                        <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-                                      </svg>
-                                    </button>
-                                    {openMenu === primary._id && (
-                                      <DropdownPortal>
-                                        <button className="appt-dropdown__item appt-dropdown__item--cancel-action"
-                                          onClick={() => { setOpenMenu(null); requestAction(primary, 'Cancelled'); }}>
-                                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="14" height="14">
-                                            <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-                                          </svg>
-                                          Cancel Appointment
-                                        </button>
-                                      </DropdownPortal>
-                                    )}
-                                  </div>
+                                {extras.length > 0 ? (
+                                  <button
+                                    className="appt-group-action"
+                                    onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
+                                  >
+                                    {isExpanded ? 'Hide' : 'Show'} appointments
+                                  </button>
+                                ) : (
+                                  renderAppointmentActions(primary)
                                 )}
                               </td>
                             </tr>
-                            {isExpanded && extras.map((appt, idx) => (
-                              <tr key={`${residentKey}-extra-${appt._id}`} className="appt-table__row appt-table__row--extra">
-                                <td className="appt-table__resident appt-table__resident--extra">
-                                  <span className="appt-extra-connector" aria-hidden="true">
-                                    {idx === extras.length - 1 ? '└' : '├'}
-                                  </span>
-                                </td>
-                                <td>
-                                  <div className="appt-table__datetime">
-                                    <span className="appt-table__date">{fmtDate(appt.date)}</span>
-                                    <span className="appt-table__time">{fmt12(appt.time)}</span>
+                            {isExpanded && extras.length > 0 && (
+                              <tr className="appt-dropdown-row">
+                                <td colSpan="5">
+                                  <div className="appt-appointment-list">
+                                    {appts.map(appt => (
+                                      <div key={appt._id} className="appt-appointment-item">
+                                        <div className="appt-appointment-item__main">
+                                          <p className="appt-appointment-item__purpose">{appt.purpose}</p>
+                                          <p className="appt-appointment-item__meta">
+                                            {fmtDate(appt.date)} · {fmt12(appt.time)}
+                                          </p>
+                                        </div>
+                                        <span className={`appt-status-badge ${STATUS_META[appt.status]?.className || 'status--scheduled'}`}>
+                                          {STATUS_META[appt.status]?.label || appt.status}
+                                        </span>
+                                        <span className="appt-appointment-item__assigned">{appt.assignedTo || 'Unassigned'}</span>
+                                        <div className="appt-appointment-item__actions" onClick={e => e.stopPropagation()}>
+                                          {renderAppointmentActions(appt)}
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
                                 </td>
-                                <td className="appt-table__purpose">{appt.purpose}</td>
-                                <td className="appt-table__menu-cell" onClick={e => e.stopPropagation()}>
-                                  <span className={`appt-status-badge ${STATUS_META[appt.status]?.className || 'status--scheduled'}`}>
-                                    {STATUS_META[appt.status]?.label || appt.status}
-                                  </span>
-                                </td>
-                                <td className="appt-table__menu-cell" onClick={e => e.stopPropagation()}>
-                                  {appt.status === 'Scheduled' && (
-                                    <div style={{ position: 'relative', display: 'inline-block' }}>
-                                      <button className="appt-table__dots-btn"
-                                        onClick={e => { e.stopPropagation(); toggleMenu(appt._id); }}>
-                                        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                                          <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-                                        </svg>
-                                      </button>
-                                      {openMenu === appt._id && (
-                                        <DropdownPortal>
-                                          <button className="appt-dropdown__item appt-dropdown__item--cancel-action"
-                                            onClick={() => { setOpenMenu(null); requestAction(appt, 'Cancelled'); }}>
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="14" height="14">
-                                              <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-                                            </svg>
-                                            Cancel Appointment
-                                          </button>
-                                        </DropdownPortal>
-                                      )}
-                                    </div>
-                                  )}
-                                </td>
                               </tr>
-                            ))}
+                            )}
                           </React.Fragment>
                         );
                       })}
@@ -1125,19 +1152,39 @@ export default function AdminAppointments() {
                       );
                       return (
                         <div key={residentKey} className="appt-card-group">
-                          {renderCard(primary)}
-                          {extras.length > 0 && (
-                            <button className="appt-more-pill appt-more-pill--card"
-                              onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
-                              aria-expanded={isExpanded}>
-                              {isExpanded ? (
-                                <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="11" height="11"><polyline points="18 15 12 9 6 15"/></svg>Collapse</>
-                              ) : (
-                                <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="11" height="11"><polyline points="6 9 12 15 18 9"/></svg>+{extras.length} more appointment{extras.length > 1 ? 's' : ''}</>
+                          {extras.length > 0 ? (
+                            <>
+                              <button
+                                type="button"
+                                className="appt-card-summary"
+                                onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
+                                aria-expanded={isExpanded}
+                              >
+                                <span className={`appt-group-toggle__chevron${isExpanded ? ' appt-group-toggle__chevron--open' : ''}`}>
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <polyline points="9 18 15 12 9 6" />
+                                  </svg>
+                                </span>
+                                <span className="appt-card-summary__main">
+                                  <span className="appt-card__name">{primary.resident}</span>
+                                  {primary.residentEmail && (
+                                    <span className="appt-card__email">{primary.residentEmail}</span>
+                                  )}
+                                  <span className="appt-group-count">{appts.length} appointments booked</span>
+                                </span>
+                                <span className="appt-card-summary__action">
+                                  {isExpanded ? 'Hide' : 'Show'}
+                                </span>
+                              </button>
+                              {isExpanded && (
+                                <div className="appt-card-dropdown">
+                                  {appts.map(appt => renderCard(appt, true))}
+                                </div>
                               )}
-                            </button>
+                            </>
+                          ) : (
+                            renderCard(primary)
                           )}
-                          {isExpanded && extras.map(appt => renderCard(appt, true))}
                         </div>
                       );
                     })}

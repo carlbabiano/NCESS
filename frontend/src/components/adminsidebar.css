@@ -214,6 +214,157 @@
   margin: 0;
 }
 
+.asb-role-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 24, 39, 0.48);
+}
+
+.asb-role-gate__dialog {
+  width: min(100%, 380px);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  padding: 22px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.asb-role-gate__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.asb-role-gate__dialog h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.asb-role-gate__dialog p {
+  margin: 6px 0 18px;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.asb-role-gate__field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.asb-role-gate__password {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.asb-role-gate__password:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.asb-role-gate__password input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: none;
+  padding: 11px 12px;
+  color: #111827;
+  font: inherit;
+}
+
+.asb-role-gate__password button {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.asb-role-gate__password button:hover {
+  color: #111827;
+  background: #f3f4f6;
+}
+
+.asb-role-gate__error {
+  margin-top: 10px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 9px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.asb-role-gate__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.asb-role-gate__cancel,
+.asb-role-gate__confirm {
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.asb-role-gate__cancel {
+  border-color: #d1d5db;
+  background: #ffffff;
+  color: #374151;
+}
+
+.asb-role-gate__cancel:hover {
+  background: #f9fafb;
+}
+
+.asb-role-gate__confirm {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.asb-role-gate__confirm:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.asb-role-gate__confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .sidebar-container {
   overflow: hidden;
   max-width: 100%;

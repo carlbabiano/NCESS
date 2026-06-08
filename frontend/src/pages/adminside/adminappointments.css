@@ -1997,60 +1997,123 @@
 }
 /* ─── Grouped Resident Rows ─────────────────────────── */
 
-/* "+N more" / "Collapse" pill button */
-.appt-more-pill {
-  display: inline-flex;
+/* Complaint-style resident appointment dropdown */
+.appt-table__row--group { background: #fff; }
+.appt-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  font-family: 'DM Sans', sans-serif;
+  color: inherit;
+  cursor: pointer;
+}
+.appt-group-toggle__chevron {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
-  gap: 4px;
-  height: 24px;
-  margin-top: 0;
-  padding: 3px 9px;
-  border-radius: 20px;
-  border: 1.5px solid #bfdbfe;
+  flex-shrink: 0;
+  transition: transform 0.15s, background 0.15s, border-color 0.15s;
+}
+.appt-group-toggle__chevron svg {
+  width: 13px;
+  height: 13px;
+  stroke: #6b7280;
+}
+.appt-group-toggle__chevron--open {
+  transform: rotate(90deg);
   background: #eff6ff;
-  color: #2563eb;
-  font-size: 11.5px;
+  border-color: #bfdbfe;
+}
+.appt-group-toggle__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.appt-group-count {
+  font-size: 12px;
   font-weight: 600;
-  font-family: 'DM Sans', sans-serif;
+  color: #2563eb;
+  margin-top: 2px;
+}
+.appt-group-status {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6b7280;
+  white-space: normal;
+  line-height: 1.4;
+}
+.appt-group-action {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;
+  background: none;
+  border: none;
   cursor: pointer;
-  transition: background 0.14s, border-color 0.14s, color 0.14s;
+  font-family: 'DM Sans', sans-serif;
+  transition: color 0.15s;
   white-space: nowrap;
 }
-
-.appt-more-pill:hover {
-  background: #dbeafe;
-  border-color: #93c5fd;
+.appt-group-action:hover { color: #1d4ed8; }
+.appt-dropdown-row td {
+  padding: 0;
+  background: #f9fafb;
 }
-
-.appt-more-pill svg {
-  flex-shrink: 0;
-  stroke: #2563eb;
+.appt-appointment-list {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px 12px;
 }
-
-/* Extra (expanded) rows – slightly indented bg */
-.appt-table__row--extra {
-  background: #fafbff;
+.appt-appointment-item {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 120px 132px 78px;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-bottom: none;
 }
-
-.appt-table__row--extra:hover {
-  background: #f0f4ff;
+.appt-appointment-item:first-child { border-radius: 10px 10px 0 0; }
+.appt-appointment-item:last-child {
+  border-bottom: 1px solid #eef2f7;
+  border-radius: 0 0 10px 10px;
 }
-
-/* Tree connector symbol in the resident cell of extra rows */
-.appt-table__resident--extra {
-  vertical-align: middle !important;
+.appt-appointment-item:only-child { border-radius: 10px; }
+.appt-appointment-item__main {
+  min-width: 0;
 }
-
-.appt-extra-connector {
-  display: inline-block;
-  font-size: 16px;
-  color: #cbd5e1;
-  line-height: 1;
-  padding-left: 4px;
-  font-family: monospace;
-  user-select: none;
+.appt-appointment-item__purpose {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 3px;
+  overflow-wrap: anywhere;
+}
+.appt-appointment-item__meta,
+.appt-appointment-item__assigned {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.appt-appointment-item__assigned {
+  color: #6b7280;
+  font-weight: 500;
+}
+.appt-appointment-item__actions {
+  display: flex;
+  justify-content: center;
+  min-height: 30px;
 }
 
 /* ─── Desktop-only table / Mobile-only cards ─────── */
@@ -2141,9 +2204,37 @@
   word-break: break-word;
 }
 
-.appt-more-pill--card {
-  margin: 4px 0 0;
+.appt-card-summary {
+  width: 100%;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px 14px;
   display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+.appt-card-summary__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.appt-card-summary__action {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #2563eb;
+  white-space: nowrap;
+}
+.appt-card-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
 }
 
 /* ─── Mobile Responsive ──────────────────────────── */

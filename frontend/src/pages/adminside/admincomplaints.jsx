@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import Sidebar from '../../components/adminsidebar';
 import AdminTopbar from '../../components/admintopbar';
@@ -59,6 +59,57 @@ function decodeAdminToken(token) {
 
 const ADMIN_EDIT_ROLES = ['barangaycaptain', 'secretary'];
 
+function normalizeResidentValue(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getResidentGroupKey(complaint) {
+  const userId = normalizeResidentValue(complaint.userId);
+  if (userId) return `user:${userId}`;
+
+  const email = normalizeResidentValue(complaint.residentEmail);
+  if (email) return `email:${email}`;
+
+  const resident = normalizeResidentValue(complaint.resident);
+  return `name:${resident || complaint._id}`;
+}
+
+function buildResidentGroups(list) {
+  const grouped = new Map();
+
+  list.forEach((complaint) => {
+    const key = getResidentGroupKey(complaint);
+    const existing = grouped.get(key);
+
+    if (existing) {
+      existing.complaints.push(complaint);
+      return;
+    }
+
+    grouped.set(key, {
+      key,
+      resident: complaint.resident || 'Unknown Resident',
+      residentEmail: complaint.residentEmail || '',
+      complaints: [complaint],
+    });
+  });
+
+  return Array.from(grouped.values()).map((group) => {
+    const counts = {
+      pending: group.complaints.filter(c => c.status === 'Pending').length,
+      inProgress: group.complaints.filter(c => c.status === 'In Progress').length,
+      resolved: group.complaints.filter(c => c.status === 'Resolved').length,
+      escalated: group.complaints.filter(c => c.status === 'Escalated').length,
+    };
+
+    return {
+      ...group,
+      latest: group.complaints[0],
+      counts,
+    };
+  });
+}
+
 /* ─── Sub-components ─────────────────────────────── */
 function StatusIcon({ type }) {
   if (type === 'clock') return (
@@ -94,6 +145,7 @@ export default function AdminComplaints() {
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [page,           setPage]           = useState(1);
+  const [expandedGroups, setExpandedGroups] = useState({});
   const [toast,          setToast]          = useState('');
 
   // File complaint modal
@@ -192,17 +244,20 @@ export default function AdminComplaints() {
     const q = search.toLowerCase();
     const matchSearch =
       c.id?.toLowerCase().includes(q)       ||
-      c.resident.toLowerCase().includes(q)  ||
-      c.category.toLowerCase().includes(q);
+      c.resident?.toLowerCase().includes(q)  ||
+      c.residentEmail?.toLowerCase().includes(q) ||
+      c.category?.toLowerCase().includes(q);
     const matchStatus = statusFilter === 'All' || c.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
+  const groupedComplaints = useMemo(() => buildResidentGroups(filtered), [filtered]);
+
   useEffect(() => { setPage(1); }, [search, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(groupedComplaints.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);
-  const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginated  = groupedComplaints.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   /* ── File modal handlers ── */
   const openFileModal  = () => { setForm(EMPTY_FORM); setFormError(''); setShowFileModal(true); };
@@ -296,6 +351,39 @@ export default function AdminComplaints() {
     }
     return nums;
   };
+
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
+  };
+
+  const renderActionButtons = (complaint) => (
+    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+      <button
+        className="cmp-table__view-btn"
+        title="View Details"
+        onClick={() => setViewTarget(complaint)}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      </button>
+      {canEdit && (
+        <button
+          className="cmp-table__view-btn cmp-table__delete-btn"
+          title="Delete"
+          onClick={() => setDeleteTarget(complaint)}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+            <path d="M10 11v6M14 11v6" />
+            <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
 
   /* ─── Render ──────────────────────────────────── */
   return (
@@ -433,65 +521,118 @@ export default function AdminComplaints() {
                   {paginated.length === 0 && (
                     <tr><td colSpan="5" className="cmp-table__empty">No complaints found.</td></tr>
                   )}
-                  {paginated.map(c => {
+                  {paginated.map(group => {
+                    const c = group.latest;
                     const sm = STATUS_META[c.status]   || STATUS_META['Pending'];
                     const pm = PRIORITY_META[c.priority] || PRIORITY_META['Medium'];
+                    const isGrouped = group.complaints.length > 1;
+                    const isOpen = !!expandedGroups[group.key];
+
+                    if (!isGrouped) {
+                      return (
+                        <tr key={c._id} className="cmp-table__row">
+                          <td>
+                            <div className="cmp-table__resident">
+                              <div className="cmp-table__avatar-placeholder">
+                                {(c.resident || '?').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="cmp-table__name">{c.resident}</p>
+                                {c.residentEmail && (
+                                  <p className="cmp-table__email">{c.residentEmail}</p>
+                                )}
+                                <p className="cmp-table__priority">
+                                  <span className="cmp-priority-dot" style={{ background: pm.dot }} />
+                                  {c.priority}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td data-label="Category" className="cmp-table__category">{c.category}</td>
+                          <td data-label="Status">
+                            <span className={`cmp-status ${sm.className}`}>
+                              <span className="cmp-status__icon"><StatusIcon type={sm.icon} /></span>
+                              {c.status}
+                            </span>
+                          </td>
+                          <td data-label="Date Filed" className="cmp-table__date">{c.dateFiled}</td>
+                          <td>{renderActionButtons(c)}</td>
+                        </tr>
+                      );
+                    }
+
                     return (
-                      <tr key={c._id} className="cmp-table__row">
-                        <td>
-                          <div className="cmp-table__resident">
-                            <div className="cmp-table__avatar-placeholder">
-                              {c.resident.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="cmp-table__name">{c.resident}</p>
-                              {c.residentEmail && (
-                                <p className="cmp-table__email">{c.residentEmail}</p>
-                              )}
-                              <p className="cmp-table__priority">
-                                <span className="cmp-priority-dot" style={{ background: pm.dot }} />
-                                {c.priority}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td data-label="Category" className="cmp-table__category">{c.category}</td>
-                        <td data-label="Status">
-                          <span className={`cmp-status ${sm.className}`}>
-                            <span className="cmp-status__icon"><StatusIcon type={sm.icon} /></span>
-                            {c.status}
-                          </span>
-                        </td>
-                        <td data-label="Date Filed" className="cmp-table__date">{c.dateFiled}</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <Fragment key={group.key}>
+                        <tr className="cmp-table__row cmp-table__row--group">
+                          <td>
                             <button
-                              className="cmp-table__view-btn"
-                              title="View Details"
-                              onClick={() => setViewTarget(c)}
+                              type="button"
+                              className="cmp-group-toggle"
+                              onClick={() => toggleGroup(group.key)}
                             >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                              </svg>
-                            </button>
-                            {canEdit && (
-                              <button
-                                className="cmp-table__view-btn cmp-table__delete-btn"
-                                title="Delete"
-                                onClick={() => setDeleteTarget(c)}
-                              >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <polyline points="3 6 5 6 21 6" />
-                                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-                                  <path d="M10 11v6M14 11v6" />
-                                  <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+                              <span className={`cmp-group-toggle__chevron${isOpen ? ' cmp-group-toggle__chevron--open' : ''}`}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <polyline points="9 18 15 12 9 6" />
                                 </svg>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                              </span>
+                              <span className="cmp-table__avatar-placeholder">
+                                {(group.resident || '?').charAt(0).toUpperCase()}
+                              </span>
+                              <span className="cmp-group-toggle__text">
+                                <span className="cmp-table__name">{group.resident}</span>
+                                {group.residentEmail && (
+                                  <span className="cmp-table__email">{group.residentEmail}</span>
+                                )}
+                                <span className="cmp-group-count">{group.complaints.length} complaints filed</span>
+                              </span>
+                            </button>
+                          </td>
+                          <td data-label="Category" className="cmp-table__category">Latest: {c.category}</td>
+                          <td data-label="Status">
+                            <span className="cmp-group-status">
+                              {group.counts.pending} pending · {group.counts.inProgress} active · {group.counts.resolved} resolved
+                            </span>
+                          </td>
+                          <td data-label="Date Filed" className="cmp-table__date">{c.dateFiled}</td>
+                          <td>
+                            <button className="cmp-group-action" onClick={() => toggleGroup(group.key)}>
+                              {isOpen ? 'Hide' : 'Show'} complaints
+                            </button>
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr className="cmp-dropdown-row">
+                            <td colSpan="5">
+                              <div className="cmp-complaint-list">
+                                {group.complaints.map(item => {
+                                  const itemStatus = STATUS_META[item.status] || STATUS_META['Pending'];
+                                  const itemPriority = PRIORITY_META[item.priority] || PRIORITY_META['Medium'];
+
+                                  return (
+                                    <div key={item._id} className="cmp-complaint-item">
+                                      <div className="cmp-complaint-item__main">
+                                        <p className="cmp-complaint-item__category">{item.category}</p>
+                                        <p className="cmp-complaint-item__meta">
+                                          {item.dateFiled}{item.location ? ` · ${item.location}` : ''}
+                                        </p>
+                                      </div>
+                                      <span className="cmp-table__priority">
+                                        <span className="cmp-priority-dot" style={{ background: itemPriority.dot }} />
+                                        {item.priority}
+                                      </span>
+                                      <span className={`cmp-status ${itemStatus.className}`}>
+                                        <span className="cmp-status__icon"><StatusIcon type={itemStatus.icon} /></span>
+                                        {item.status}
+                                      </span>
+                                      {renderActionButtons(item)}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -501,7 +642,7 @@ export default function AdminComplaints() {
               {totalPages > 1 && (
                 <div className="cmp-pagination">
                   <p className="cmp-pagination__info">
-                    Showing <strong>{(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)}</strong> of <strong>{filtered.length}</strong>
+                    Showing <strong>{(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, groupedComplaints.length)}</strong> of <strong>{groupedComplaints.length}</strong> residents
                   </p>
                   <div className="cmp-pagination__controls">
                     <button className="cmp-page-btn" onClick={() => setPage(p => p - 1)} disabled={safePage === 1}>← Prev</button>

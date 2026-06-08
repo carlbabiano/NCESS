@@ -657,6 +657,31 @@ router.get("/admins", requireAdmin, requireSuperAdmin, async (req, res) => {
   }
 });
 
+// POST /admins/verify-password - confirm current admin before opening Admin & Roles
+router.post("/admins/verify-password", requireAdmin, requireSuperAdmin, async (req, res) => {
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ message: "Password is required." });
+  }
+
+  try {
+    const admin = await Admin.findById(req.admin.id);
+    if (!admin) {
+      return res.status(404).json({ message: "Admin account not found." });
+    }
+
+    const passwordOk = await bcrypt.compare(password, admin.password);
+    if (!passwordOk) {
+      return res.status(401).json({ message: "Incorrect password." });
+    }
+
+    res.status(200).json({ message: "Password verified." });
+  } catch (error) {
+    console.error("Verify admin password error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // POST /admins — create a new admin account
 router.post("/admins", requireAdmin, requireSuperAdmin, async (req, res) => {
   const { email, password, role, firstName, lastName, mobileNo } = req.body;

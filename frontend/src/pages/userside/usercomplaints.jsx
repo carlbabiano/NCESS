@@ -56,7 +56,6 @@ export default function UserComplaints() {
   const [loading,     setLoading]     = useState(true);
   const [fetchError,  setFetchError]  = useState('');
   const [search,      setSearch]      = useState('');
-  const [complaintsOpen, setComplaintsOpen] = useState(false);
 
   // File modal
   const [showModal,   setShowModal]   = useState(false);
@@ -129,13 +128,6 @@ export default function UserComplaints() {
     return [c.id, c._id, c.category, c.status, c.priority, c.location, c.description, c.dateFiled]
       .some((value) => String(value || '').toLowerCase().includes(q));
   });
-
-  const latestComplaint = filtered[0];
-  const filteredStats = {
-    pending: filtered.filter(c => c.status === 'Pending').length,
-    inProgress: filtered.filter(c => c.status === 'In Progress').length,
-    resolved: filtered.filter(c => c.status === 'Resolved').length,
-  };
 
   /* ── Form helpers ── */
   const openModal  = () => { setForm(EMPTY_FORM); setFormError(''); setShowModal(true); };
@@ -269,70 +261,24 @@ export default function UserComplaints() {
                   {filtered.length === 0 && (
                     <tr><td colSpan="5" className="ucmp-empty">No complaints found.</td></tr>
                   )}
-                  {filtered.length > 0 && (
-                    <>
-                      <tr className="ucmp-row ucmp-summary-row">
-                        <td className="ucmp-cat">
-                          <button
-                            type="button"
-                            className="ucmp-summary-toggle"
-                            onClick={() => setComplaintsOpen(v => !v)}
-                          >
-                            <span className={`ucmp-summary-chevron${complaintsOpen ? ' ucmp-summary-chevron--open' : ''}`}>
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <polyline points="9 18 15 12 9 6" />
-                              </svg>
-                            </span>
-                            <span>
-                              My complaints
-                              <small>{filtered.length} filed</small>
-                            </span>
-                          </button>
-                        </td>
-                        <td data-label="Priority">
-                          {latestComplaint && (
-                            <span className="ucmp-priority">
-                              <span className="ucmp-priority__dot" style={{ background: PRIORITY_DOT[latestComplaint.priority] || PRIORITY_DOT.Medium }} />
-                              Latest: {latestComplaint.priority}
-                            </span>
-                          )}
-                        </td>
-                        <td data-label="Date Filed" className="ucmp-date">{latestComplaint?.dateFiled}</td>
-                        <td data-label="Status">
-                          <span className="ucmp-summary-status">
-                            {filteredStats.pending} pending · {filteredStats.inProgress} in progress · {filteredStats.resolved} resolved
-                          </span>
-                        </td>
-                        <td data-label="Action">
-                          <button className="ucmp-track-btn" onClick={() => setComplaintsOpen(v => !v)}>
-                            {complaintsOpen ? 'Hide' : 'Show'} complaints
-                          </button>
-                        </td>
-                      </tr>
-                      {complaintsOpen && (
-                        <tr className="ucmp-dropdown-row">
-                          <td colSpan="5">
-                            <div className="ucmp-complaint-list">
-                              {filtered.map(c => (
-                                <div key={c._id} className="ucmp-complaint-item">
-                                  <div className="ucmp-complaint-item__main">
-                                    <p className="ucmp-complaint-item__cat">{c.category}</p>
-                                    <p className="ucmp-complaint-item__meta">{c.dateFiled}{c.location ? ` · ${c.location}` : ''}</p>
-                                  </div>
-                                  <span className="ucmp-priority">
-                                    <span className="ucmp-priority__dot" style={{ background: PRIORITY_DOT[c.priority] || PRIORITY_DOT.Medium }} />
-                                    {c.priority}
-                                  </span>
-                                  <span className={`ucmp-badge ${STATUS_CLS[c.status] || 'ucs--pending'}`}>{c.status}</span>
-                                  <button className="ucmp-track-btn" onClick={() => setShowTrack(c)}>Track →</button>
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  )}
+                  {filtered.map(c => (
+                    <tr key={c._id} className="ucmp-row">
+                      <td className="ucmp-cat">{c.category}</td>
+                      <td data-label="Priority">
+                        <span className="ucmp-priority">
+                          <span className="ucmp-priority__dot" style={{ background: PRIORITY_DOT[c.priority] || PRIORITY_DOT.Medium }} />
+                          {c.priority}
+                        </span>
+                      </td>
+                      <td data-label="Date Filed" className="ucmp-date">{c.dateFiled}</td>
+                      <td data-label="Status">
+                        <span className={`ucmp-badge ${STATUS_CLS[c.status] || 'ucs--pending'}`}>{c.status}</span>
+                      </td>
+                      <td data-label="Action">
+                        <button className="ucmp-track-btn" onClick={() => setShowTrack(c)}>Track →</button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
