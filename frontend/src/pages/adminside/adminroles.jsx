@@ -626,7 +626,7 @@ function ReactivateModal({ admin, onClose, onUpdated }) {
 }
 
 // ── Profile Detail Modal ──────────────────────────────────────────────────────
-function ProfileDetailModal({ admin, currentId, onClose, onEdit, onResetPw, onDeactivate, onReactivate }) {
+function ProfileDetailModal({ admin, currentId, onClose, onEdit, onResetPw, onDeactivate, onReactivate, onDelete }) {
   const displayName = [admin.firstName, admin.lastName].filter(Boolean).join(' ') || '—';
   const isSelf      = admin._id === currentId;
   const status      = admin.accountStatus || 'active';
@@ -676,35 +676,47 @@ function ProfileDetailModal({ admin, currentId, onClose, onEdit, onResetPw, onDe
         </div>
 
         <div className="aroles-profile__actions">
-          <button className="aroles-profile__action-btn" onClick={() => { onClose(); onResetPw(admin); }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
-              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
-            </svg>
-            Reset Password
-          </button>
-          <button className="aroles-profile__action-btn" onClick={() => { onClose(); onEdit(admin); }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
-              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-            Edit
-          </button>
-          {!isSelf && status === 'active' && (
-            <button className="aroles-profile__action-btn aroles-profile__action-btn--warning" onClick={() => { onClose(); onDeactivate(admin); }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
-                <circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/>
-              </svg>
-              Deactivate
-            </button>
+          {status === 'active' && (
+            <>
+              <button className="aroles-profile__action-btn" onClick={() => { onClose(); onResetPw(admin); }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                  <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+                Reset Password
+              </button>
+              <button className="aroles-profile__action-btn" onClick={() => { onClose(); onEdit(admin); }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                Edit
+              </button>
+              {!isSelf && (
+                <button className="aroles-profile__action-btn aroles-profile__action-btn--warning" onClick={() => { onClose(); onDeactivate(admin); }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                    <circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/>
+                  </svg>
+                  Deactivate
+                </button>
+              )}
+            </>
           )}
           {!isSelf && status !== 'active' && (
-            <button className="aroles-profile__action-btn" onClick={() => { onClose(); onReactivate(admin); }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
-                <polyline points="23 4 23 10 17 10"/>
-                <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
-              </svg>
-              Reactivate
-            </button>
+            <>
+              <button className="aroles-profile__action-btn aroles-profile__action-btn--reactivate" onClick={() => { onClose(); onReactivate(admin); }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                </svg>
+                Reactivate
+              </button>
+              <button className="aroles-profile__action-btn aroles-profile__action-btn--danger" onClick={() => { onClose(); onDelete(admin); }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                </svg>
+                Delete Permanently
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -883,6 +895,7 @@ export default function AdminRoles() {
 
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   const token       = getToken();
   const decoded     = decodeToken(token);
@@ -910,9 +923,25 @@ export default function AdminRoles() {
     fetchAdmins();
   }, [token]);
 
+  useEffect(() => {
+    const closeMenuOnOutsideClick = (event) => {
+      if (!event.target.closest('.aroles-row__menu')) {
+        setOpenMenuId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', closeMenuOnOutsideClick);
+    return () => document.removeEventListener('mousedown', closeMenuOnOutsideClick);
+  }, []);
+
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(''), 3000);
+  };
+
+  const openModalFromMenu = (nextModal) => {
+    setModal(nextModal);
+    setOpenMenuId(null);
   };
 
   const handleSaved = (savedAdmin, mode) => {
@@ -1032,7 +1061,7 @@ export default function AdminRoles() {
                           const isInactive  = acctStatus !== 'active';
 
                           return (
-                            <div className={`aroles-row${isInactive ? ' aroles-row--inactive' : ''}`} key={a._id}>
+                            <div className={`aroles-row${isInactive ? ' aroles-row--inactive' : ''}${openMenuId === a._id ? ' aroles-row--menu-open' : ''}`} key={a._id}>
                               <div className="aroles-row__content">
                                 <button
                                   className="aroles-row__avatar-btn"
@@ -1055,65 +1084,60 @@ export default function AdminRoles() {
                                 <button
                                   className="aroles-row__menu-trigger"
                                   title="More actions"
-                                  onClick={() => {
-                                    const menuId = `menu-${a._id}`;
-                                    const menu = document.getElementById(menuId);
-                                    if (menu) {
-                                      menu.classList.toggle('aroles-row__menu-open');
-                                    }
-                                  }}
+                                  aria-expanded={openMenuId === a._id}
+                                  onClick={() => setOpenMenuId(prev => prev === a._id ? null : a._id)}
                                 >
                                   <svg viewBox="0 0 24 24" fill="currentColor">
                                     <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
                                   </svg>
                                 </button>
-                                <div className="aroles-row__menu-dropdown" id={`menu-${a._id}`}>
-                                  <button
-                                    className="aroles-row__menu-item"
-                                    onClick={() => {
-                                      setModal({ type: 'draweredit', admin: a });
-                                      document.getElementById(`menu-${a._id}`).classList.remove('aroles-row__menu-open');
-                                    }}
-                                  >
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                    </svg>
-                                    Edit
-                                  </button>
-                                  <button
-                                    className="aroles-row__menu-item"
-                                    onClick={() => {
-                                      setModal({ type: 'resetpw', admin: a });
-                                      document.getElementById(`menu-${a._id}`).classList.remove('aroles-row__menu-open');
-                                    }}
-                                  >
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                                      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
-                                    </svg>
-                                    Reset Password
-                                  </button>
-                                  {!isSelf && acctStatus === 'active' && (
-                                    <button
-                                      className="aroles-row__menu-item aroles-row__menu-item--warning"
-                                      onClick={() => {
-                                        setModal({ type: 'deactivate', admin: a });
-                                        document.getElementById(`menu-${a._id}`).classList.remove('aroles-row__menu-open');
-                                      }}
-                                    >
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                                        <circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/>
-                                      </svg>
-                                      Deactivate
-                                    </button>
-                                  )}
-                                  {!isSelf && acctStatus !== 'active' && (
+                                <div className={`aroles-row__menu-dropdown${openMenuId === a._id ? ' aroles-row__menu-open' : ''}`} id={`menu-${a._id}`}>
+                                  {acctStatus === 'active' && (
                                     <>
                                       <button
                                         className="aroles-row__menu-item"
                                         onClick={() => {
-                                          setModal({ type: 'reactivate', admin: a });
-                                          document.getElementById(`menu-${a._id}`).classList.remove('aroles-row__menu-open');
+                                          openModalFromMenu({ type: 'draweredit', admin: a });
+                                        }}
+                                      >
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                        </svg>
+                                        Edit
+                                      </button>
+                                      <button
+                                        className="aroles-row__menu-item"
+                                        onClick={() => {
+                                          openModalFromMenu({ type: 'resetpw', admin: a });
+                                        }}
+                                      >
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                                          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                                        </svg>
+                                        Reset Password
+                                      </button>
+                                      {!isSelf && (
+                                        <button
+                                          className="aroles-row__menu-item aroles-row__menu-item--warning"
+                                          onClick={() => {
+                                            openModalFromMenu({ type: 'deactivate', admin: a });
+                                          }}
+                                        >
+                                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                                            <circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/>
+                                          </svg>
+                                          Deactivate
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                  {!isSelf && acctStatus !== 'active' && (
+                                    <>
+                                      <button
+                                        className="aroles-row__menu-item aroles-row__menu-item--reactivate"
+                                        onClick={() => {
+                                          openModalFromMenu({ type: 'reactivate', admin: a });
                                         }}
                                       >
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
@@ -1125,12 +1149,11 @@ export default function AdminRoles() {
                                       <button
                                         className="aroles-row__menu-item aroles-row__menu-item--danger"
                                         onClick={() => {
-                                          setModal({ type: 'delete', admin: a });
-                                          document.getElementById(`menu-${a._id}`).classList.remove('aroles-row__menu-open');
+                                          openModalFromMenu({ type: 'delete', admin: a });
                                         }}
                                       >
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                                         </svg>
                                         Delete Permanently
                                       </button>
@@ -1161,6 +1184,7 @@ export default function AdminRoles() {
           onResetPw={(a)     => setModal({ type: 'resetpw', admin: a })}
           onDeactivate={(a)  => setModal({ type: 'deactivate', admin: a })}
           onReactivate={(a)  => setModal({ type: 'reactivate', admin: a })}
+          onDelete={(a)      => setModal({ type: 'delete', admin: a })}
         />
       )}
       {modal?.type === 'draweredit' && (

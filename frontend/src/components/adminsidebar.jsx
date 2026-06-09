@@ -260,13 +260,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
         </nav>
 
         <div className="sidebar__bottom">
-          <button
-            className={`sidebar__nav-item${isActive('/adminsettings') ? ' sidebar__nav-item--active' : ''}`}
-            onClick={() => handleNav('/adminsettings')}
-          >
-            <span className="sidebar__nav-icon"><Settings size={18} /></span>
-            <span className="sidebar__nav-label">Settings</span>
-          </button>
 
           {/* Admin & Roles — only visible to Captain and Secretary */}
           {canManageAdmins && (

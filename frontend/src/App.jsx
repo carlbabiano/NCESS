@@ -13,7 +13,6 @@ import UserAppointments from './pages/userside/userappointments';
 import UserComplaints from './pages/userside/usercomplaints';
 import UserBarangaySupport from './pages/userside/userbarangaysupport';
 import UserSideHotlineMapping from './pages/userside/usersidehotlinemapping';
-import UserSettings from './pages/userside/usersettings';
 
 import AdminLogin from './pages/adminside/adminlogin';
 import AdminDashboard from "./pages/adminside/admindashboard";
@@ -25,7 +24,6 @@ import AdminResidents from './pages/adminside/adminresidents';
 import AdminProfileRequest from './pages/adminside/adminprofilerequest';
 
 import AdminRoles from './pages/adminside/adminroles';
-import AdminSettings from './pages/adminside/adminsettings';
 import AdminScanQr from './pages/adminside/adminscanqr';
 
 const CAPTAIN_SECRETARY_ROLES = ['barangaycaptain', 'secretary'];
@@ -46,7 +44,6 @@ function App() {
           <Route path='/usercomplaints' element={<PrivateRoute><UserComplaints /></PrivateRoute>} />
           <Route path='/userbarangaysupport' element={<PrivateRoute><UserBarangaySupport /></PrivateRoute>} />
           <Route path='/usersidehotlinemapping' element={<PrivateRoute><UserSideHotlineMapping /></PrivateRoute>} />
-          <Route path='/usersettings' element={<PrivateRoute><UserSettings /></PrivateRoute>} />
 
           <Route path="/adminlogin" element={<AdminLogin />} />
           
@@ -59,7 +56,6 @@ function App() {
           <Route path="/adminresidents/account-approval" element={<PrivateRoute allowedAdminRoles={CAPTAIN_SECRETARY_ROLES}><AdminResidents initialTab="Pending" /></PrivateRoute>} />
           <Route path="/adminprofilerequest" element={<PrivateRoute allowedAdminRoles={CAPTAIN_SECRETARY_ROLES}><AdminProfileRequest /></PrivateRoute>} />
           <Route path="/adminroles" element={<PrivateRoute><AdminRoles /></PrivateRoute>} />
-          <Route path="/adminsettings" element={<PrivateRoute><AdminSettings /></PrivateRoute>} />
           <Route path="/adminscanqr" element={<PrivateRoute><AdminScanQr /></PrivateRoute>} />
         </Routes>
       </div>

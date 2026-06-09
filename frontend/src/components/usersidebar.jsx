@@ -85,16 +85,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
         {/* Footer */}
         <div className="sidebar__bottom">
           <button
-            className={`sidebar__nav-item${isActive('/usersettings') ? ' sidebar__nav-item--active' : ''}`}
-            onClick={() => {
-              navigate('/usersettings');
-              setSidebarOpen(false);
-            }}
-          >
-            <span className="sidebar__nav-icon"><Settings size={18} /></span>
-            <span className="sidebar__nav-label">Settings</span>
-          </button>
-          <button
             className="sidebar__nav-item sidebar__nav-item--logout"
             onClick={() => {
               localStorage.removeItem('token');

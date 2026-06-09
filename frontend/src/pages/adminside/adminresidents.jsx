@@ -1163,31 +1163,22 @@ export default function AdminResidents({ initialTab = 'All' }) {
                                 >
                                   View Submitted Documents
                                 </button>
-                                {r.status !== 'approved' && (
-                                  <button
-                                    className="res-dropdown__item"
-                                    style={{ color: '#16a34a' }}
-                                    onClick={() => { updateStatus(r._id, 'approved'); setOpenMenu(null); }}
-                                  >
-                                    Approve
-                                  </button>
-                                )}
-                                {r.status !== 'denied' && (
-                                  <button
-                                    className="res-dropdown__item res-dropdown__item--danger"
-                                    onClick={() => { handleDenyClick(r._id); setOpenMenu(null); }}
-                                  >
-                                    Deny
-                                  </button>
-                                )}
-                                {r.status !== 'pending' && (
-                                  <button
-                                    className="res-dropdown__item"
-                                    style={{ color: '#d97706' }}
-                                    onClick={() => { updateStatus(r._id, 'pending'); setOpenMenu(null); }}
-                                  >
-                                    Reset to Pending
-                                  </button>
+                                {r.status === 'pending' && (
+                                  <>
+                                    <button
+                                      className="res-dropdown__item"
+                                      style={{ color: '#16a34a' }}
+                                      onClick={() => { updateStatus(r._id, 'approved'); setOpenMenu(null); }}
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      className="res-dropdown__item res-dropdown__item--danger"
+                                      onClick={() => { handleDenyClick(r._id); setOpenMenu(null); }}
+                                    >
+                                      Deny
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             )}

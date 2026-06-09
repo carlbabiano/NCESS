@@ -253,8 +253,12 @@
 }
 .aroles-profile__action-btn:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
 .aroles-profile__action-btn svg { stroke: currentColor; }
-.aroles-profile__action-btn--danger:hover { border-color: #ef4444; color: #ef4444; background: #fef2f2; }
-.aroles-profile__action-btn--warning:hover { border-color: #f59e0b; color: #d97706; background: #fffbeb; }
+.aroles-profile__action-btn--reactivate { border-color: #bfdbfe; color: #2563eb; }
+.aroles-profile__action-btn--reactivate:hover { border-color: #2563eb; color: #1d4ed8; background: #eff6ff; }
+.aroles-profile__action-btn--danger { border-color: #fecaca; color: #ef4444; }
+.aroles-profile__action-btn--danger:hover { border-color: #ef4444; color: #dc2626; background: #fef2f2; }
+.aroles-profile__action-btn--warning { border-color: #fed7aa; color: #d97706; }
+.aroles-profile__action-btn--warning:hover { border-color: #f59e0b; color: #b45309; background: #fffbeb; }
 
 /* ── Clickable avatar button on card ── */
 .aroles-card__avatar-btn {
@@ -268,7 +272,7 @@
 /* ── Rows Layout ── */
 .aroles-rows-container { display:flex; flex-direction:column; gap:28px; }
 
-.aroles-role-section { display:flex; flex-direction:column; gap:12px; }
+.aroles-role-section { display:flex; flex-direction:column; gap:12px; position:relative; overflow:visible; }
 
 .aroles-role-section__title {
   font-size:15px; font-weight:700; color:#374151;
@@ -276,7 +280,7 @@
   display:flex; align-items:center; gap:8px;
 }
 
-.aroles-rows-list { display:flex; flex-direction:column; gap:8px; }
+.aroles-rows-list { display:flex; flex-direction:column; gap:8px; overflow:visible; }
 
 .aroles-row {
   display:flex; align-items:center; justify-content:space-between;
@@ -284,9 +288,11 @@
   border-radius:12px; padding:16px 20px;
   transition:all 0.2s;
   position:relative;
+  z-index:1;
 }
 .aroles-row:hover { border-color:#e5e7eb; box-shadow:0 2px 12px rgba(0,0,0,0.05); }
 .aroles-row--inactive { background:#fafafa; opacity:0.9; }
+.aroles-row--menu-open { z-index:50; opacity:1; }
 
 .aroles-row__content {
   display:flex; align-items:center; gap:12px; flex:1; min-width:0;
@@ -312,7 +318,7 @@
 .aroles-row__self { font-size:11px; color:#9ca3af; font-weight:500; margin-left:4px; }
 
 /* 3-Dot Menu */
-.aroles-row__menu { position:relative; flex-shrink:0; }
+.aroles-row__menu { position:relative; flex-shrink:0; z-index:60; }
 
 .aroles-row__menu-trigger {
   width:32px; height:32px; padding:0; border:1.5px solid #e5e7eb;
@@ -329,7 +335,7 @@
   background:#fff; border:1px solid #e5e7eb; border-radius:10px;
   box-shadow:0 10px 30px rgba(0,0,0,0.12);
   min-width:160px; display:none; flex-direction:column;
-  z-index:1000;
+  z-index:10000;
 }
 .aroles-row__menu-dropdown.aroles-row__menu-open { display:flex; }
 
@@ -352,8 +358,12 @@
 .aroles-row__menu-item:first-child { border-radius:9px 9px 0 0; }
 .aroles-row__menu-item:last-child { border-radius:0 0 9px 9px; }
 .aroles-row__menu-item:hover { background:#eff6ff; color:#2563eb; }
-.aroles-row__menu-item--warning:hover { background:#fffbeb; color:#d97706; }
-.aroles-row__menu-item--danger:hover { background:#fef2f2; color:#ef4444; }
+.aroles-row__menu-item--reactivate { color:#2563eb; }
+.aroles-row__menu-item--reactivate:hover { background:#eff6ff; color:#1d4ed8; }
+.aroles-row__menu-item--warning { color:#d97706; }
+.aroles-row__menu-item--warning:hover { background:#fffbeb; color:#b45309; }
+.aroles-row__menu-item--danger { color:#ef4444; }
+.aroles-row__menu-item--danger:hover { background:#fef2f2; color:#dc2626; }
 .aroles-row__menu-item svg { width:16px; height:16px; stroke:currentColor; flex-shrink:0; }
 
 /* ── Drawer Panel ── */

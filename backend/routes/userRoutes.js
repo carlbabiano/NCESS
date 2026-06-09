@@ -195,16 +195,17 @@ router.post("/usersignup/upload-document", (req, res, next) => {
 // A denied account's email is considered available (re-registration is allowed).
 router.post("/usersignup/check-email", async (req, res) => {
   const { email } = req.body;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!email || !String(email).trim())
+  if (!normalizedEmail)
     return res.status(400).json({ message: "Email is required." });
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(String(email).trim()))
+  if (!emailRegex.test(normalizedEmail))
     return res.status(400).json({ message: "Please enter a valid email address." });
 
   try {
-    const existing = await User.findOne({ email: String(email).trim().toLowerCase() });
+    const existing = await User.findOne({ email: normalizedEmail });
 
     // No account found — email is free to use
     if (!existing)
@@ -231,8 +232,9 @@ router.post("/usersignup", async (req, res) => {
     homeAddress, purok,
   } = req.body;
   const validId = req.body.validId || req.body.validIdUrl || '';
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  if (!email || !password)
+  if (!normalizedEmail || !password)
     return res.status(400).json({ message: "Email and password are required" });
 
   if (birthdate) {
@@ -244,14 +246,15 @@ router.post("/usersignup", async (req, res) => {
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email))
+  if (!emailRegex.test(normalizedEmail))
     return res.status(400).json({ message: "Please enter a valid email address" });
 
   try {
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       if (existingUser.status === 'denied') {
         const hashedPassword = await bcrypt.hash(password, 10);
+        existingUser.email         = normalizedEmail;
         existingUser.password      = hashedPassword;
         existingUser.status        = 'pending';
         existingUser.denialReason  = ''; // Clear previous denial reason
@@ -278,7 +281,7 @@ router.post("/usersignup", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({
-      email, password: hashedPassword, status: 'pending',
+      email: normalizedEmail, password: hashedPassword, status: 'pending',
       firstName: firstName || '', middleName: middleName || '', lastName: lastName || '',
       birthdate: birthdate || '', sex: sex || '', contactNumber: contactNumber || '',
       homeAddress: homeAddress || '', purok: purok || '',
@@ -299,7 +302,7 @@ router.post("/usersignup", async (req, res) => {
 // ── Save verification documents (called after signup during document upload) ──
 router.post("/usersignup/documents/:email", async (req, res) => {
   try {
-    const { email } = req.params;
+    const email = String(req.params.email || '').trim().toLowerCase();
     const validId = req.body.validId || req.body.validIdUrl || '';
 
     console.log("[Documents Storage] Received:", { email, hasValidId: !!validId });

@@ -146,10 +146,23 @@ export default function UserSignup() {
     }
   };
 
+  const setBirthdateValue = (value) => {
+    setBday(value);
+    if (!value) {
+      setBdayDisplay('');
+      return;
+    }
+    const [yyyy, mm, dd] = value.split('-');
+    setBdayDisplay(`${mm}/${dd}/${yyyy}`);
+  };
+
   const [sex,         setSex]         = useState('');
   const [contact,     setContact]     = useState('');
   const [homeAddress, setHomeAddress] = useState('');
   const [purok,       setPurok]       = useState('');
+  const [addressBarangay, setAddressBarangay] = useState(DEFAULT_BARANGAY);
+  const [addressCity,     setAddressCity]     = useState(DEFAULT_CITY);
+  const [addressRegion,   setAddressRegion]   = useState(DEFAULT_REGION);
 
   // ── Step 1 — Account Setup ────────────────────────────────────────────────
   const [email,     setEmail]     = useState('');
@@ -202,8 +215,28 @@ export default function UserSignup() {
       if (!validIdFile) e.validIdFile = 'Valid ID is required.';
     }
     if (step === 3) {
-      // Summary step, just validating data exists
-      if (!validIdFile) e.validIdFile = 'Valid ID is required.';
+      if (!firstName.trim())   e.firstName   = 'First name is required.';
+      if (!lastName.trim())    e.lastName    = 'Last name is required.';
+      if (!bday)               e.bday = 'Date of birth is required.';
+      else if (bday > new Date().toISOString().slice(0, 10)) e.bday = 'Date of birth cannot be a future date.';
+      else {
+        const today = new Date(); const birth = new Date(bday);
+        const age = today.getFullYear() - birth.getFullYear() -
+          (today < new Date(today.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
+        if (age < 18) e.bday = 'You must be at least 18 years old to register.';
+      }
+      if (!sex)                e.sex         = 'Sex is required.';
+      if (!contact.trim()) {
+        e.contact = 'Contact number is required.';
+      } else if (!/^\d{11}$/.test(contact)) {
+        e.contact = 'Contact number must be exactly 11 digits (numbers only).';
+      }
+      if (!homeAddress.trim()) e.homeAddress = 'Home address is required.';
+      if (!purok)              e.purok       = 'Please select your Purok.';
+      if (!email.trim())       e.email       = 'Email address is required.';
+      if (password.length < 8) e.password    = 'Password must be at least 8 characters.';
+      if (password !== confirmPw) e.confirmPw = 'Passwords do not match.';
+      if (!validIdFile)        e.validIdFile = 'Valid ID is required.';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -261,6 +294,14 @@ export default function UserSignup() {
 
     setLoading(true);
     try {
+      const emailCheckRes = await fetch(`${API_URL}/usersignup/check-email`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const emailCheckData = await emailCheckRes.json();
+      if (!emailCheckRes.ok) throw new Error(emailCheckData.message || 'Email check failed. Please try again.');
+
       // Upload Valid ID through backend
       const validIdFormData = new FormData();
       validIdFormData.append('file', validIdFile);
@@ -274,7 +315,7 @@ export default function UserSignup() {
       if (!validIdRes.ok) throw new Error('Valid ID upload failed');
       if (!validIdData.url) throw new Error('Valid ID upload did not return a document URL');
 
-      const fullHomeAddress = [homeAddress, DEFAULT_BARANGAY, DEFAULT_CITY, DEFAULT_REGION]
+      const fullHomeAddress = [homeAddress, addressBarangay, addressCity, addressRegion]
         .filter(Boolean)
         .join(', ');
 
@@ -467,7 +508,8 @@ export default function UserSignup() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>First Name</label>
-                  <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.firstName ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  {errors.firstName && <p className="su-field-error">{errors.firstName}</p>}
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Middle Name</label>
@@ -475,7 +517,8 @@ export default function UserSignup() {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Last Name</label>
-                  <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.lastName ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  {errors.lastName && <p className="su-field-error">{errors.lastName}</p>}
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Suffix</label>
@@ -486,37 +529,48 @@ export default function UserSignup() {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Date of Birth</label>
-                  <input type="text" value={bdayDisplay} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                  <input type="date" value={bday} onChange={e => setBirthdateValue(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.bday ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  {errors.bday && <p className="su-field-error">{errors.bday}</p>}
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Sex</label>
-                  <input type="text" value={sex} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                  <select value={sex} onChange={e => setSex(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.sex ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                    <option value="">Select sex</option>
+                    {SEX.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  {errors.sex && <p className="su-field-error">{errors.sex}</p>}
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Contact Number</label>
-                  <input type="text" value={contact} onChange={e => setContact(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  <input type="text" value={contact} onChange={e => setContact(e.target.value.replace(/\D/g, '').slice(0, 11))} style={{ width: '100%', padding: '8px 12px', border: errors.contact ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  {errors.contact && <p className="su-field-error">{errors.contact}</p>}
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Purok</label>
-                  <input type="text" value={purok} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                  <select value={purok} onChange={e => setPurok(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.purok ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                    <option value="">Select Purok</option>
+                    {PUROKS.map(p => <option key={p}>{p}</option>)}
+                  </select>
+                  {errors.purok && <p className="su-field-error">{errors.purok}</p>}
                 </div>
               </div>
               <div style={{ marginTop: 16 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Street/Building No.</label>
-                <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.homeAddress ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                {errors.homeAddress && <p className="su-field-error">{errors.homeAddress}</p>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Barangay</label>
-                  <input type="text" value={DEFAULT_BARANGAY} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                  <input type="text" value={addressBarangay} onChange={e => setAddressBarangay(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>City</label>
-                  <input type="text" value={DEFAULT_CITY} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                  <input type="text" value={addressCity} onChange={e => setAddressCity(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Region</label>
-                  <input type="text" value={DEFAULT_REGION} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                  <input type="text" value={addressRegion} onChange={e => setAddressRegion(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                 </div>
               </div>
             </div>
@@ -526,7 +580,40 @@ export default function UserSignup() {
               <h3 style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Account Information</h3>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Email Address</label>
-                <input type="email" value={email} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6' }} />
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.email ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                {errors.email && <p className="su-field-error">{errors.email}</p>}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Password</label>
+                  <div style={{ position: 'relative' }}>
+                    <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{ width: '100%', padding: '8px 38px 8px 12px', border: errors.password ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw(!showPw)}
+                      aria-label={showPw ? 'Hide password' : 'Show password'}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, border: 'none', background: 'transparent', color: '#6b7280', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      {showPw ? <EyeOff/> : <EyeOpen/>}
+                    </button>
+                  </div>
+                  {errors.password && <p className="su-field-error">{errors.password}</p>}
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Confirm Password</label>
+                  <div style={{ position: 'relative' }}>
+                    <input type={showCPw ? 'text' : 'password'} value={confirmPw} onChange={e => setConfirmPw(e.target.value)} style={{ width: '100%', padding: '8px 38px 8px 12px', border: errors.confirmPw ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                    <button
+                      type="button"
+                      onClick={() => setShowCPw(!showCPw)}
+                      aria-label={showCPw ? 'Hide confirm password' : 'Show confirm password'}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, border: 'none', background: 'transparent', color: '#6b7280', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      {showCPw ? <EyeOff/> : <EyeOpen/>}
+                    </button>
+                  </div>
+                  {errors.confirmPw && <p className="su-field-error">{errors.confirmPw}</p>}
+                </div>
               </div>
             </div>
 
@@ -535,11 +622,44 @@ export default function UserSignup() {
               <h3 style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Document Upload</h3>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Valid ID</label>
-                <div style={{ padding: 12, backgroundColor: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb' }}>
-                  <p style={{ margin: 0, fontSize: 13, color: '#1f2937', fontWeight: 500 }}>
-                    {validIdFile ? `✓ ${validIdFile.name}` : 'No file selected'}
-                  </p>
+                <div style={{ padding: 12, backgroundColor: '#f9fafb', borderRadius: 6, border: errors.validIdFile ? '1px solid #ef4444' : '1px solid #e5e7eb' }}>
+                  {validIdFile?.type.startsWith('image/') && validIdPreview ? (
+                    <img
+                      src={validIdPreview}
+                      alt="Submitted valid ID"
+                      style={{ width: '100%', maxHeight: 280, objectFit: 'contain', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', display: 'block' }}
+                    />
+                  ) : validIdFile ? (
+                    <div style={{ padding: 16, textAlign: 'center', background: '#fff', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" style={{ width: 32, height: 32, margin: '0 auto 8px' }}>
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                      <p style={{ margin: 0, fontSize: 12, color: '#2563eb', fontWeight: 600 }}>{validIdFile.name}</p>
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 13, color: '#9ca3af' }}>No file selected</p>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                    <p style={{ margin: 0, fontSize: 13, color: '#1f2937', fontWeight: 500, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {validIdFile ? validIdFile.name : 'No file selected'}
+                    </p>
+                    <input
+                      type="file"
+                      id="reviewValidId"
+                      accept="image/*,.pdf"
+                      onChange={handleValidIdChange}
+                      style={{ display: 'none' }}
+                      disabled={loading}
+                    />
+                    <label
+                      htmlFor="reviewValidId"
+                      style={{ padding: '7px 10px', fontSize: 12, fontWeight: 700, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer' }}
+                    >
+                      Change
+                    </label>
+                  </div>
                 </div>
+                {errors.validIdFile && <p className="su-field-error">{errors.validIdFile}</p>}
               </div>
             </div>
 
