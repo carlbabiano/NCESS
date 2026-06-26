@@ -105,6 +105,27 @@ const CheckIcon = () => (
   </svg>
 );
 
+function calculateAge(birthdate) {
+  if (!birthdate) return null;
+
+  const [yyyy, mm, dd] = birthdate.split('-').map(Number);
+  const birth = new Date(yyyy, mm - 1, dd);
+  if (
+    !yyyy || !mm || !dd ||
+    birth.getFullYear() !== yyyy ||
+    birth.getMonth() !== mm - 1 ||
+    birth.getDate() !== dd
+  ) {
+    return null;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - yyyy;
+  const birthdayThisYear = new Date(today.getFullYear(), mm - 1, dd);
+  if (today < birthdayThisYear) age -= 1;
+  return age;
+}
+
 export default function UserSignup() {
   const [step,    setStep]    = useState(0);
   const [loading, setLoading] = useState(false);
@@ -176,12 +197,15 @@ export default function UserSignup() {
   // ── Step 2 — Information Verification ─────────────────────────────────────
   const [validIdFile, setValidIdFile] = useState(null);
   const [validIdPreview, setValidIdPreview] = useState('');
+  const [validIdDragging, setValidIdDragging] = useState(false);
 
   const [errors, setErrors] = useState({});
 
   const pwStrength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < 10 ? 2 : 3;
   const pwLabel    = ['', 'Weak', 'Fair', 'Strong'];
   const pwClass    = ['', 'su-pw--weak', 'su-pw--fair', 'su-pw--strong'];
+  const age = calculateAge(bday);
+  const ageDisplay = age === null ? '--' : `${age}`;
 
   const validate = () => {
     const e = {};
@@ -191,10 +215,9 @@ export default function UserSignup() {
       if (!bday)               e.bday = 'Date of birth is required.';
       else if (bday > new Date().toISOString().slice(0, 10)) e.bday = 'Date of birth cannot be a future date.';
       else {
-        const today = new Date(); const birth = new Date(bday);
-        const age = today.getFullYear() - birth.getFullYear() -
-          (today < new Date(today.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
-        if (age < 18) e.bday = 'You must be at least 18 years old to register.';
+        const age = calculateAge(bday);
+        if (age === null) e.bday = 'Please enter a valid date of birth.';
+        else if (age < 18) e.bday = 'You must be at least 18 years old to register.';
       }
       if (!sex)                e.sex         = 'Sex is required.';
       if (!contact.trim()) {
@@ -220,10 +243,9 @@ export default function UserSignup() {
       if (!bday)               e.bday = 'Date of birth is required.';
       else if (bday > new Date().toISOString().slice(0, 10)) e.bday = 'Date of birth cannot be a future date.';
       else {
-        const today = new Date(); const birth = new Date(bday);
-        const age = today.getFullYear() - birth.getFullYear() -
-          (today < new Date(today.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
-        if (age < 18) e.bday = 'You must be at least 18 years old to register.';
+        const age = calculateAge(bday);
+        if (age === null) e.bday = 'Please enter a valid date of birth.';
+        else if (age < 18) e.bday = 'You must be at least 18 years old to register.';
       }
       if (!sex)                e.sex         = 'Sex is required.';
       if (!contact.trim()) {
@@ -372,15 +394,50 @@ export default function UserSignup() {
   };
 
   // ── File handlers ──────────────────────────────────────────────────────────
-  const handleValidIdChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setValidIdFile(file);
+  const applyValidIdFile = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      setErrors(prev => ({ ...prev, validIdFile: 'Please upload an image or PDF file.' }));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, validIdFile: 'File must be 5 MB or smaller.' }));
+      return;
+    }
+
+    setValidIdFile(file);
+    if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (event) => setValidIdPreview(event.target?.result || '');
       reader.readAsDataURL(file);
-      setErrors(prev => ({ ...prev, validIdFile: '' }));
+    } else {
+      setValidIdPreview('');
     }
+    setErrors(prev => ({ ...prev, validIdFile: '' }));
+  };
+
+  const handleValidIdChange = (e) => {
+    applyValidIdFile(e.target.files?.[0]);
+  };
+
+  const handleValidIdDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!loading) setValidIdDragging(true);
+  };
+
+  const handleValidIdDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget)) setValidIdDragging(false);
+  };
+
+  const handleValidIdDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setValidIdDragging(false);
+    if (loading) return;
+    applyValidIdFile(e.dataTransfer.files?.[0]);
   };
 
 
@@ -498,14 +555,15 @@ export default function UserSignup() {
       {step === 3 && (
         <div className="su-summary-overlay">
           <div className="su-summary-panel">
-            <p style={{ fontSize: 15, fontWeight: 700, color: '#1f2937', marginBottom: 24, textAlign: 'center' }}>
-              Review and Confirm Your Information
-            </p>
+            <div className="su-form-head su-summary-head">
+              <h1>Review and Confirm Your Information</h1>
+              <p>Check your details before submitting your registration.</p>
+            </div>
 
             {/* Personal Info Section */}
-            <div style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #e5e7eb' }}>
-              <h3 style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Personal Information</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="su-summary-section" style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #e5e7eb' }}>
+              <h3 className="su-summary-section__title" style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Personal Information</h3>
+              <div className="su-summary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>First Name</label>
                   <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.firstName ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
@@ -528,11 +586,6 @@ export default function UserSignup() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Date of Birth</label>
-                  <input type="date" value={bday} onChange={e => setBirthdateValue(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.bday ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
-                  {errors.bday && <p className="su-field-error">{errors.bday}</p>}
-                </div>
-                <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Sex</label>
                   <select value={sex} onChange={e => setSex(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.sex ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
                     <option value="">Select sex</option>
@@ -541,23 +594,32 @@ export default function UserSignup() {
                   {errors.sex && <p className="su-field-error">{errors.sex}</p>}
                 </div>
                 <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Date of Birth</label>
+                  <input type="date" value={bday} onChange={e => setBirthdateValue(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.bday ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  {errors.bday && <p className="su-field-error">{errors.bday}</p>}
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Age</label>
+                  <input type="text" value={ageDisplay} readOnly style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#f3f4f6', color: '#6b7280' }} />
+                </div>
+                <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Contact Number</label>
                   <input type="text" value={contact} onChange={e => setContact(e.target.value.replace(/\D/g, '').slice(0, 11))} style={{ width: '100%', padding: '8px 12px', border: errors.contact ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                   {errors.contact && <p className="su-field-error">{errors.contact}</p>}
                 </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Purok</label>
-                  <select value={purok} onChange={e => setPurok(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.purok ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
-                    <option value="">Select Purok</option>
-                    {PUROKS.map(p => <option key={p}>{p}</option>)}
-                  </select>
-                  {errors.purok && <p className="su-field-error">{errors.purok}</p>}
-                </div>
               </div>
               <div style={{ marginTop: 16 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Street/Building No.</label>
+                <label className="su-summary-address-title" style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Street/Building No.</label>
                 <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.homeAddress ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                 {errors.homeAddress && <p className="su-field-error">{errors.homeAddress}</p>}
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Purok</label>
+                <select value={purok} onChange={e => setPurok(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.purok ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                  <option value="">Select Purok</option>
+                  {PUROKS.map(p => <option key={p}>{p}</option>)}
+                </select>
+                {errors.purok && <p className="su-field-error">{errors.purok}</p>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
                 <div>
@@ -576,14 +638,14 @@ export default function UserSignup() {
             </div>
 
             {/* Account Setup Section */}
-            <div style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #e5e7eb' }}>
-              <h3 style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Account Information</h3>
+            <div className="su-summary-section" style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #e5e7eb' }}>
+              <h3 className="su-summary-section__title" style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Account Information</h3>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Email Address</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.email ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                 {errors.email && <p className="su-field-error">{errors.email}</p>}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+              <div className="su-summary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Password</label>
                   <div style={{ position: 'relative' }}>
@@ -618,8 +680,8 @@ export default function UserSignup() {
             </div>
 
             {/* Information Verification Section */}
-            <div style={{ marginBottom: 24 }}>
-              <h3 style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Document Upload</h3>
+            <div className="su-summary-section su-summary-section--last" style={{ marginBottom: 24 }}>
+              <h3 className="su-summary-section__title" style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Document Upload</h3>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Valid ID</label>
                 <div style={{ padding: 12, backgroundColor: '#f9fafb', borderRadius: 6, border: errors.validIdFile ? '1px solid #ef4444' : '1px solid #e5e7eb' }}>
@@ -664,9 +726,10 @@ export default function UserSignup() {
             </div>
 
             {/* Panel Navigation */}
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between' }}>
+            <div className="su-summary-actions" style={{ display: 'flex', gap: 12, justifyContent: 'space-between' }}>
               <button
                 type="button"
+                className="su-back-btn"
                 onClick={back}
                 disabled={loading}
                 style={{
@@ -686,6 +749,7 @@ export default function UserSignup() {
               </button>
               <button
                 type="button"
+                className="su-next-btn"
                 onClick={handleSubmit}
                 disabled={loading}
                 style={{
@@ -846,8 +910,16 @@ export default function UserSignup() {
                   </div>
                 </div>
 
-                {/* Row: Date of Birth / Sex */}
-                <div className="su-row-2">
+                {/* Row: Sex / Date of Birth / Age */}
+                <div className="su-row-3">
+                  <div className="su-field">
+                    <label>Sex</label>
+                    <select value={sex} onChange={e => setSex(e.target.value)} className={errors.sex ? 'su-input--error' : ''}>
+                      <option value="">Select...</option>
+                      {SEX.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                    {errors.sex && <p className="su-field-error">{errors.sex}</p>}
+                  </div>
                   <div className="su-field">
                     <label>Date of Birth</label>
                     <div className="su-input-wrap">
@@ -885,12 +957,13 @@ export default function UserSignup() {
                     {errors.bday && <p className="su-field-error">{errors.bday}</p>}
                   </div>
                   <div className="su-field">
-                    <label>Sex</label>
-                    <select value={sex} onChange={e => setSex(e.target.value)} className={errors.sex ? 'su-input--error' : ''}>
-                      <option value="">Select...</option>
-                      {SEX.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                    {errors.sex && <p className="su-field-error">{errors.sex}</p>}
+                    <label>Age</label>
+                    <input
+                      type="text"
+                      value={ageDisplay}
+                      readOnly
+                      className="su-summary-readonly"
+                    />
                   </div>
                 </div>
 
@@ -915,6 +988,16 @@ export default function UserSignup() {
                   {errors.homeAddress && <p className="su-field-error">{errors.homeAddress}</p>}
                 </div>
 
+                {/* Purok */}
+                <div className="su-field">
+                  <label>Purok</label>
+                  <select value={purok} onChange={e => setPurok(e.target.value)} className={errors.purok ? 'su-input--error' : ''}>
+                    <option value="">Select Purok...</option>
+                    {PUROKS.map(p => <option key={p}>{p}</option>)}
+                  </select>
+                  {errors.purok && <p className="su-field-error">{errors.purok}</p>}
+                </div>
+
                 <div className="su-row-2">
                   <div className="su-field">
                     <label>Barangay</label>
@@ -929,16 +1012,6 @@ export default function UserSignup() {
                 <div className="su-field">
                   <label>Region</label>
                   <input type="text" placeholder="Region" value={DEFAULT_REGION} disabled />
-                </div>
-
-                {/* Purok */}
-                <div className="su-field">
-                  <label>Purok</label>
-                  <select value={purok} onChange={e => setPurok(e.target.value)} className={errors.purok ? 'su-input--error' : ''}>
-                    <option value="">Select Purok...</option>
-                    {PUROKS.map(p => <option key={p}>{p}</option>)}
-                  </select>
-                  {errors.purok && <p className="su-field-error">{errors.purok}</p>}
                 </div>
 
               </div>
@@ -1036,7 +1109,13 @@ export default function UserSignup() {
                   <p style={{ fontSize: 12, color: '#666', margin: '4px 0 8px' }}>
                     Upload a clear photo/scan of a valid government-issued ID or school ID
                   </p>
-                  <div className="su-file-upload">
+                  <div
+                    className={`su-file-upload${validIdDragging ? ' su-file-upload--dragging' : ''}`}
+                    onDragEnter={handleValidIdDragOver}
+                    onDragOver={handleValidIdDragOver}
+                    onDragLeave={handleValidIdDragLeave}
+                    onDrop={handleValidIdDrop}
+                  >
                     <input
                       type="file"
                       id="validId"
@@ -1045,7 +1124,7 @@ export default function UserSignup() {
                       style={{ display: 'none' }}
                       disabled={loading}
                     />
-                    {!validIdPreview ? (
+                    {!validIdFile ? (
                       <label htmlFor="validId" className="su-file-label" style={{ cursor: loading ? 'not-allowed' : 'pointer' }}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 32, height: 32, marginBottom: 8 }}>
                           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
@@ -1071,6 +1150,7 @@ export default function UserSignup() {
                           onClick={() => {
                             setValidIdFile(null);
                             setValidIdPreview('');
+                            setValidIdDragging(false);
                           }}
                           style={{ marginTop: 8, padding: '4px 12px', fontSize: 12, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: 4 }}
                         >

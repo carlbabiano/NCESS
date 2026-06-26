@@ -1237,7 +1237,15 @@
 .utb-modal-nav-item--done   .utb-modal-nav-step { background: #dcfce7; color: #16a34a; }
 .utb-modal-nav-icon { width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; }
 .utb-modal-nav-icon svg { width: 15px; height: 15px; }
-.utb-modal-nav-label { font-size: 12.5px; line-height: 1.3; }
+.utb-modal-nav-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  line-height: 1.3;
+}
 
 .utb-modal-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
