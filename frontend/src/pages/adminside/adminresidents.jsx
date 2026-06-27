@@ -67,7 +67,9 @@ function mapUser(u) {
     nationality:     u.nationality     || '',
     // address — stored as single field from signup
     homeAddress:     u.homeAddress     || '',
+    residentType:    u.residentType    || '',
     residencyStatus: u.residencyStatus || '',
+    permanentAddress: u.permanentAddress || '',
     lengthOfStay:    u.lengthOfStay    || '',
     voterStatus:     u.voterStatus     || '',
     householdId:     u.householdId     || '',
@@ -111,7 +113,9 @@ const PROFILE_SECTIONS = [
     fields: [
       { key: 'homeAddress',     label: 'Full Address',          fullWidth: true },
       { key: 'purok',           label: 'Purok'          },
+      { key: 'residentType',    label: 'Resident Type'          },
       { key: 'residencyStatus', label: 'Residency Status'       },
+      { key: 'permanentAddress', label: 'Permanent Address', fullWidth: true },
       { key: 'lengthOfStay',    label: 'Length of Stay'         },
       { key: 'householdId',     label: 'Household / Family ID'  },
     ],

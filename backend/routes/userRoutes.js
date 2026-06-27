@@ -28,6 +28,17 @@ const userSchema = new mongoose.Schema({
   contactNumber: { type: String, default: '' },
   homeAddress:   { type: String, default: '' },
   purok:         { type: String, default: '' },
+  residentType:  { type: String, enum: ['permanent', 'temporary'], default: 'permanent' },
+  addressBarangay: { type: String, default: '' },
+  addressCity:     { type: String, default: '' },
+  addressProvince: { type: String, default: '' },
+  addressRegion:   { type: String, default: '' },
+  permanentAddress:  { type: String, default: '' },
+  permanentStreet:   { type: String, default: '' },
+  permanentBarangay: { type: String, default: '' },
+  permanentCity:     { type: String, default: '' },
+  permanentProvince: { type: String, default: '' },
+  permanentRegion:   { type: String, default: '' },
   residencyStatus: { type: String, default: '' },
   lengthOfStay:    { type: String, default: '' },
   voterStatus:     { type: String, default: '' },
@@ -230,6 +241,10 @@ router.post("/usersignup", async (req, res) => {
     firstName, middleName, lastName,
     birthdate, sex, contactNumber,
     homeAddress, purok,
+    residentType, residencyStatus,
+    addressBarangay, addressCity, addressProvince, addressRegion,
+    permanentAddress, permanentStreet, permanentBarangay,
+    permanentCity, permanentProvince, permanentRegion,
   } = req.body;
   const validId = req.body.validId || req.body.validIdUrl || '';
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -266,6 +281,18 @@ router.post("/usersignup", async (req, res) => {
         existingUser.contactNumber = contactNumber || '';
         existingUser.homeAddress   = homeAddress   || '';
         existingUser.purok         = purok         || '';
+        existingUser.residentType  = residentType === 'temporary' ? 'temporary' : 'permanent';
+        existingUser.residencyStatus = residencyStatus || '';
+        existingUser.addressBarangay = addressBarangay || '';
+        existingUser.addressCity     = addressCity     || '';
+        existingUser.addressProvince = addressProvince || '';
+        existingUser.addressRegion   = addressRegion   || '';
+        existingUser.permanentAddress  = permanentAddress  || '';
+        existingUser.permanentStreet   = permanentStreet   || '';
+        existingUser.permanentBarangay = permanentBarangay || '';
+        existingUser.permanentCity     = permanentCity     || '';
+        existingUser.permanentProvince = permanentProvince || '';
+        existingUser.permanentRegion   = permanentRegion   || '';
         if (validId) {
           existingUser.validIdUrl = validId;
         }
@@ -285,6 +312,18 @@ router.post("/usersignup", async (req, res) => {
       firstName: firstName || '', middleName: middleName || '', lastName: lastName || '',
       birthdate: birthdate || '', sex: sex || '', contactNumber: contactNumber || '',
       homeAddress: homeAddress || '', purok: purok || '',
+      residentType: residentType === 'temporary' ? 'temporary' : 'permanent',
+      residencyStatus: residencyStatus || '',
+      addressBarangay: addressBarangay || '',
+      addressCity: addressCity || '',
+      addressProvince: addressProvince || '',
+      addressRegion: addressRegion || '',
+      permanentAddress: permanentAddress || '',
+      permanentStreet: permanentStreet || '',
+      permanentBarangay: permanentBarangay || '',
+      permanentCity: permanentCity || '',
+      permanentProvince: permanentProvince || '',
+      permanentRegion: permanentRegion || '',
       validIdUrl: validId || '',
     });
     await user.save();

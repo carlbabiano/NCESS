@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './usersignup.css';
 
 import newcablogo          from '../../assets/newcab.png';
@@ -11,10 +11,53 @@ const SEX          = ['Male', 'Female'];
 const PUROKS       = ['Purok 1', 'Purok 2', 'Purok 3', 'Purok 4', 'Purok 5', 'Purok 6', 'Purok 7', 'Iram'];
 const DEFAULT_CITY = 'Olongapo City';
 const DEFAULT_BARANGAY = 'New Cabalan';
+const DEFAULT_PROVINCE = 'Zambales';
 const DEFAULT_REGION = 'Region III';
+const PSGC_API_URL = 'https://psgc.gitlab.io/api';
+const RESIDENCY_TYPES = [
+  { value: 'permanent', label: 'Permanent Resident' },
+  { value: 'temporary', label: 'Temporary Resident / Tenant' },
+];
 
 const STEPS = ['Personal Info', 'Account Setup', 'Information Verification'];
 const SUFFIXES = ['Jr', 'Sr', 'I', 'II', 'III', 'IV', 'V'];
+
+const getPsgcName = item => item?.name || item?.regionName || item?.provinceName || item?.cityName || item?.municipalityName || '';
+const sortPsgcList = list => [...list].sort((a, b) => getPsgcName(a).localeCompare(getPsgcName(b)));
+const REGION_DISPLAY_NAMES = {
+  '010000000': 'REGION I (ILOCOS REGION)',
+  '020000000': 'REGION II (CAGAYAN VALLEY)',
+  '030000000': 'REGION III (CENTRAL LUZON)',
+  '040000000': 'REGION IV-A (CALABARZON)',
+  '170000000': 'REGION IV-B (MIMAROPA)',
+  '050000000': 'REGION V (BICOL REGION)',
+  '060000000': 'REGION VI (WESTERN VISAYAS)',
+  '070000000': 'REGION VII (CENTRAL VISAYAS)',
+  '080000000': 'REGION VIII (EASTERN VISAYAS)',
+  '090000000': 'REGION IX (ZAMBOANGA PENINSULA)',
+  '100000000': 'REGION X (NORTHERN MINDANAO)',
+  '110000000': 'REGION XI (DAVAO REGION)',
+  '120000000': 'REGION XII (SOCCSKSARGEN)',
+  '130000000': 'NATIONAL CAPITAL REGION (NCR)',
+  '140000000': 'CORDILLERA ADMINISTRATIVE REGION (CAR)',
+  '150000000': 'BANGSAMORO AUTONOMOUS REGION IN MUSLIM MINDANAO (BARMM)',
+  '160000000': 'REGION XIII (CARAGA)',
+};
+const REGION_ORDER = [
+  '010000000', '020000000', '030000000', '040000000', '170000000',
+  '050000000', '060000000', '070000000', '080000000', '090000000',
+  '100000000', '110000000', '120000000', '130000000', '140000000',
+  '150000000', '160000000',
+];
+const getRegionDisplayName = region => REGION_DISPLAY_NAMES[region?.code] || `${region?.regionName || ''} (${region?.name || ''})`.trim();
+const sortRegions = list => [...list].sort((a, b) => {
+  const indexA = REGION_ORDER.indexOf(a.code);
+  const indexB = REGION_ORDER.indexOf(b.code);
+  if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+  if (indexA !== -1) return -1;
+  if (indexB !== -1) return 1;
+  return getRegionDisplayName(a).localeCompare(getRegionDisplayName(b));
+});
 
 const PRIVACY_POLICY = {
   title: 'Privacy Policy',
@@ -179,11 +222,22 @@ export default function UserSignup() {
 
   const [sex,         setSex]         = useState('');
   const [contact,     setContact]     = useState('');
+  const [residentType, setResidentType] = useState('');
   const [homeAddress, setHomeAddress] = useState('');
   const [purok,       setPurok]       = useState('');
-  const [addressBarangay, setAddressBarangay] = useState(DEFAULT_BARANGAY);
-  const [addressCity,     setAddressCity]     = useState(DEFAULT_CITY);
-  const [addressRegion,   setAddressRegion]   = useState(DEFAULT_REGION);
+  const [permanentStreet, setPermanentStreet] = useState('');
+  const [permanentBarangay, setPermanentBarangay] = useState('');
+  const [permanentCity, setPermanentCity] = useState('');
+  const [permanentProvince, setPermanentProvince] = useState('');
+  const [permanentRegion, setPermanentRegion] = useState('');
+  const [permanentRegionCode, setPermanentRegionCode] = useState('');
+  const [permanentProvinceCode, setPermanentProvinceCode] = useState('');
+  const [permanentCityCode, setPermanentCityCode] = useState('');
+  const [psgcRegions, setPsgcRegions] = useState([]);
+  const [psgcProvinces, setPsgcProvinces] = useState([]);
+  const [psgcCities, setPsgcCities] = useState([]);
+  const [psgcLoading, setPsgcLoading] = useState({ regions: false, provinces: false, cities: false });
+  const [psgcError, setPsgcError] = useState('');
 
   // ── Step 1 — Account Setup ────────────────────────────────────────────────
   const [email,     setEmail]     = useState('');
@@ -206,6 +260,130 @@ export default function UserSignup() {
   const pwClass    = ['', 'su-pw--weak', 'su-pw--fair', 'su-pw--strong'];
   const age = calculateAge(bday);
   const ageDisplay = age === null ? '--' : `${age}`;
+  const hasSelectedResidencyType = !!residentType;
+
+  useEffect(() => {
+    if (residentType !== 'temporary' || psgcRegions.length > 0) return;
+
+    let cancelled = false;
+    setPsgcLoading(prev => ({ ...prev, regions: true }));
+    setPsgcError('');
+
+    fetch(`${PSGC_API_URL}/regions`)
+      .then(res => {
+        if (!res.ok) throw new Error('Unable to load PSGC regions.');
+        return res.json();
+      })
+      .then(data => {
+        if (!cancelled) setPsgcRegions(sortRegions(Array.isArray(data) ? data : []));
+      })
+      .catch(() => {
+        if (!cancelled) setPsgcError('Unable to load PSGC locations. Please check your connection and try again.');
+      })
+      .finally(() => {
+        if (!cancelled) setPsgcLoading(prev => ({ ...prev, regions: false }));
+      });
+
+    return () => { cancelled = true; };
+  }, [residentType, psgcRegions.length]);
+
+  useEffect(() => {
+    if (residentType !== 'temporary' || !permanentRegionCode) {
+      setPsgcProvinces([]);
+      return;
+    }
+
+    let cancelled = false;
+    setPsgcLoading(prev => ({ ...prev, provinces: true }));
+    setPsgcError('');
+
+    fetch(`${PSGC_API_URL}/regions/${permanentRegionCode}/provinces`)
+      .then(res => {
+        if (!res.ok) throw new Error('Unable to load PSGC provinces.');
+        return res.json();
+      })
+      .then(data => {
+        if (!cancelled) setPsgcProvinces(sortPsgcList(Array.isArray(data) ? data : []));
+      })
+      .catch(() => {
+        if (!cancelled) setPsgcError('Unable to load provinces for the selected region.');
+      })
+      .finally(() => {
+        if (!cancelled) setPsgcLoading(prev => ({ ...prev, provinces: false }));
+      });
+
+    return () => { cancelled = true; };
+  }, [residentType, permanentRegionCode]);
+
+  useEffect(() => {
+    if (residentType !== 'temporary' || !permanentProvinceCode) {
+      setPsgcCities([]);
+      return;
+    }
+
+    let cancelled = false;
+    setPsgcLoading(prev => ({ ...prev, cities: true }));
+    setPsgcError('');
+
+    fetch(`${PSGC_API_URL}/provinces/${permanentProvinceCode}/cities-municipalities`)
+      .then(res => {
+        if (!res.ok) throw new Error('Unable to load PSGC cities and municipalities.');
+        return res.json();
+      })
+      .then(data => {
+        if (!cancelled) setPsgcCities(sortPsgcList(Array.isArray(data) ? data : []));
+      })
+      .catch(() => {
+        if (!cancelled) setPsgcError('Unable to load cities/municipalities for the selected province.');
+      })
+      .finally(() => {
+        if (!cancelled) setPsgcLoading(prev => ({ ...prev, cities: false }));
+      });
+
+    return () => { cancelled = true; };
+  }, [residentType, permanentProvinceCode]);
+
+  const handleResidencyTypeChange = value => {
+    setResidentType(value);
+    setPsgcError('');
+    if (value !== 'temporary') {
+      setPermanentRegion('');
+      setPermanentRegionCode('');
+      setPermanentProvince('');
+      setPermanentProvinceCode('');
+      setPermanentCity('');
+      setPermanentCityCode('');
+      setPsgcProvinces([]);
+      setPsgcCities([]);
+    }
+  };
+
+  const handlePermanentRegionChange = code => {
+    const selected = psgcRegions.find(region => region.code === code);
+    setPermanentRegionCode(code);
+    setPermanentRegion(selected ? getRegionDisplayName(selected) : '');
+    setPermanentProvinceCode('');
+    setPermanentProvince('');
+    setPermanentCityCode('');
+    setPermanentCity('');
+    setPsgcProvinces([]);
+    setPsgcCities([]);
+  };
+
+  const handlePermanentProvinceChange = code => {
+    const selected = psgcProvinces.find(province => province.code === code);
+    setPermanentProvinceCode(code);
+    setPermanentProvince(selected ? getPsgcName(selected) : '');
+    setPermanentCityCode('');
+    setPermanentCity('');
+    setPsgcCities([]);
+  };
+
+  const handlePermanentCityChange = code => {
+    const selected = psgcCities.find(city => city.code === code);
+    setPermanentCityCode(code);
+    setPermanentCity(selected ? getPsgcName(selected) : '');
+  };
 
   const validate = () => {
     const e = {};
@@ -213,7 +391,7 @@ export default function UserSignup() {
       if (!firstName.trim())   e.firstName   = 'First name is required.';
       if (!lastName.trim())    e.lastName    = 'Last name is required.';
       if (!bday)               e.bday = 'Date of birth is required.';
-      else if (bday > new Date().toISOString().slice(0, 10)) e.bday = 'Date of birth cannot be a future date.';
+      else if (bday > new Date().toISOString().slice(0, 10)) e.bday = 'Please enter a valid date of birth.';
       else {
         const age = calculateAge(bday);
         if (age === null) e.bday = 'Please enter a valid date of birth.';
@@ -225,8 +403,18 @@ export default function UserSignup() {
       } else if (!/^\d{11}$/.test(contact)) {
         e.contact = 'Contact number must be exactly 11 digits (numbers only).';
       }
-      if (!homeAddress.trim()) e.homeAddress = 'Home address is required.';
-      if (!purok)              e.purok       = 'Please select your Purok.';
+      if (!residentType) e.residentType = 'Please select your residency type.';
+      if (residentType) {
+        if (!homeAddress.trim()) e.homeAddress = 'Home address is required.';
+        if (!purok)              e.purok       = 'Please select your Purok.';
+      }
+      if (residentType === 'temporary') {
+        if (!permanentStreet.trim())   e.permanentStreet   = 'Permanent address is required.';
+        if (!permanentBarangay.trim()) e.permanentBarangay = 'Barangay is required.';
+        if (!permanentCity.trim())     e.permanentCity     = 'City / Municipality is required.';
+        if (!permanentProvince.trim()) e.permanentProvince = 'Province is required.';
+        if (!permanentRegion.trim())   e.permanentRegion   = 'Region is required.';
+      }
     }
     if (step === 1) {
       if (!email.trim())          e.email     = 'Email address is required.';
@@ -253,8 +441,18 @@ export default function UserSignup() {
       } else if (!/^\d{11}$/.test(contact)) {
         e.contact = 'Contact number must be exactly 11 digits (numbers only).';
       }
-      if (!homeAddress.trim()) e.homeAddress = 'Home address is required.';
-      if (!purok)              e.purok       = 'Please select your Purok.';
+      if (!residentType) e.residentType = 'Please select your residency type.';
+      if (residentType) {
+        if (!homeAddress.trim()) e.homeAddress = 'Home address is required.';
+        if (!purok)              e.purok       = 'Please select your Purok.';
+      }
+      if (residentType === 'temporary') {
+        if (!permanentStreet.trim())   e.permanentStreet   = 'Permanent address is required.';
+        if (!permanentBarangay.trim()) e.permanentBarangay = 'Barangay is required.';
+        if (!permanentCity.trim())     e.permanentCity     = 'City / Municipality is required.';
+        if (!permanentProvince.trim()) e.permanentProvince = 'Province is required.';
+        if (!permanentRegion.trim())   e.permanentRegion   = 'Region is required.';
+      }
       if (!email.trim())       e.email       = 'Email address is required.';
       if (password.length < 8) e.password    = 'Password must be at least 8 characters.';
       if (password !== confirmPw) e.confirmPw = 'Passwords do not match.';
@@ -337,9 +535,41 @@ export default function UserSignup() {
       if (!validIdRes.ok) throw new Error('Valid ID upload failed');
       if (!validIdData.url) throw new Error('Valid ID upload did not return a document URL');
 
-      const fullHomeAddress = [homeAddress, addressBarangay, addressCity, addressRegion]
+      const fullHomeAddress = [homeAddress, DEFAULT_BARANGAY, DEFAULT_CITY, DEFAULT_PROVINCE, DEFAULT_REGION]
         .filter(Boolean)
         .join(', ');
+      const fullPermanentAddress = residentType === 'temporary'
+        ? [permanentStreet, permanentBarangay, permanentCity, permanentProvince, permanentRegion]
+          .filter(Boolean)
+          .join(', ')
+        : '';
+      const residencyStatus = residentType === 'temporary'
+        ? 'Temporary Resident / Tenant'
+        : 'Permanent Resident';
+      const currentAddressProvince = residentType === 'permanent' ? DEFAULT_PROVINCE : '';
+
+      const fullPresentAddress = residentType === 'temporary'
+        ? [homeAddress, DEFAULT_BARANGAY, DEFAULT_CITY, DEFAULT_REGION]
+          .filter(Boolean)
+          .join(', ')
+        : fullHomeAddress;
+      const submittedHomeAddress = residentType === 'temporary' ? fullPresentAddress : fullHomeAddress;
+      const submittedPermanentAddress = residentType === 'temporary' ? fullPermanentAddress : fullHomeAddress;
+
+      const addressPayload = {
+        residentType,
+        residencyStatus,
+        addressBarangay: DEFAULT_BARANGAY,
+        addressCity: DEFAULT_CITY,
+        addressProvince: currentAddressProvince,
+        addressRegion: DEFAULT_REGION,
+        permanentAddress: submittedPermanentAddress,
+        permanentStreet: residentType === 'temporary' ? permanentStreet : homeAddress,
+        permanentBarangay: residentType === 'temporary' ? permanentBarangay : DEFAULT_BARANGAY,
+        permanentCity: residentType === 'temporary' ? permanentCity : DEFAULT_CITY,
+        permanentProvince: residentType === 'temporary' ? permanentProvince : DEFAULT_PROVINCE,
+        permanentRegion: residentType === 'temporary' ? permanentRegion : DEFAULT_REGION,
+      };
 
       // Register user with all information
       const registerRes = await fetch(`${API_URL}/usersignup`, {
@@ -355,8 +585,9 @@ export default function UserSignup() {
           birthdate:     bday,
           sex,
           contactNumber: contact,
-          homeAddress: fullHomeAddress,
+          homeAddress: submittedHomeAddress,
           purok,
+          ...addressPayload,
           validId: validIdData.url,
           validIdUrl: validIdData.url,
         }),
@@ -587,7 +818,7 @@ export default function UserSignup() {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Sex</label>
-                  <select value={sex} onChange={e => setSex(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.sex ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                  <select className="su-select" value={sex} onChange={e => setSex(e.target.value)} style={{ width: '100%', border: errors.sex ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
                     <option value="">Select sex</option>
                     {SEX.map(s => <option key={s}>{s}</option>)}
                   </select>
@@ -609,13 +840,24 @@ export default function UserSignup() {
                 </div>
               </div>
               <div style={{ marginTop: 16 }}>
-                <label className="su-summary-address-title" style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Street/Building No.</label>
-                <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.homeAddress ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Residency Type</label>
+                <select className="su-select" value={residentType} onChange={e => handleResidencyTypeChange(e.target.value)} style={{ width: '100%', border: errors.residentType ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                  <option value="">Select residency type</option>
+                  {RESIDENCY_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
+                </select>
+                {errors.residentType && <p className="su-field-error">{errors.residentType}</p>}
+              </div>
+              {residentType === 'temporary' && (
+                <h3 className="su-summary-address-title" style={{ marginTop: 16 }}>Present Address in Barangay New Cabalan</h3>
+              )}
+              <div style={{ marginTop: 16 }}>
+                <label className="su-summary-address-title" style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>House No./Street/Building No.</label>
+                <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} disabled={!hasSelectedResidencyType} style={{ width: '100%', padding: '8px 12px', border: errors.homeAddress ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                 {errors.homeAddress && <p className="su-field-error">{errors.homeAddress}</p>}
               </div>
               <div style={{ marginTop: 12 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Purok</label>
-                <select value={purok} onChange={e => setPurok(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.purok ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                <select className="su-select" value={purok} onChange={e => setPurok(e.target.value)} disabled={!hasSelectedResidencyType} style={{ width: '100%', border: errors.purok ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
                   <option value="">Select Purok</option>
                   {PUROKS.map(p => <option key={p}>{p}</option>)}
                 </select>
@@ -624,17 +866,65 @@ export default function UserSignup() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Barangay</label>
-                  <input type="text" value={addressBarangay} onChange={e => setAddressBarangay(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  <input type="text" value={DEFAULT_BARANGAY} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>City</label>
-                  <input type="text" value={addressCity} onChange={e => setAddressCity(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  <input type="text" value={DEFAULT_CITY} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                 </div>
+                {residentType !== 'temporary' && (
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Province</label>
+                    <input type="text" value={DEFAULT_PROVINCE} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  </div>
+                )}
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Region</label>
-                  <input type="text" value={addressRegion} onChange={e => setAddressRegion(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  <input type="text" value={DEFAULT_REGION} disabled style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                 </div>
               </div>
+              {residentType === 'temporary' && (
+                <div style={{ marginTop: 18 }}>
+                  <h3 className="su-summary-address-title">Permanent Address</h3>
+                  {psgcError && <p className="su-field-error" style={{ marginTop: 10 }}>{psgcError}</p>}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Region</label>
+                      <select className="su-select" value={permanentRegionCode} onChange={e => handlePermanentRegionChange(e.target.value)} disabled={psgcLoading.regions} style={{ width: '100%', border: errors.permanentRegion ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                        <option value="">{psgcLoading.regions ? 'Loading regions...' : 'Select Region'}</option>
+                        {psgcRegions.map(region => <option key={region.code} value={region.code}>{getRegionDisplayName(region)}</option>)}
+                      </select>
+                      {errors.permanentRegion && <p className="su-field-error">{errors.permanentRegion}</p>}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Province</label>
+                      <select className="su-select" value={permanentProvinceCode} onChange={e => handlePermanentProvinceChange(e.target.value)} disabled={!permanentRegionCode || psgcLoading.provinces} style={{ width: '100%', border: errors.permanentProvince ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                        <option value="">{psgcLoading.provinces ? 'Loading provinces...' : 'Select Province'}</option>
+                        {psgcProvinces.map(province => <option key={province.code} value={province.code}>{getPsgcName(province)}</option>)}
+                      </select>
+                      {errors.permanentProvince && <p className="su-field-error">{errors.permanentProvince}</p>}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>City / Municipality</label>
+                      <select className="su-select" value={permanentCityCode} onChange={e => handlePermanentCityChange(e.target.value)} disabled={!permanentProvinceCode || psgcLoading.cities} style={{ width: '100%', border: errors.permanentCity ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
+                        <option value="">{psgcLoading.cities ? 'Loading cities/municipalities...' : 'Select City / Municipality'}</option>
+                        {psgcCities.map(city => <option key={city.code} value={city.code}>{getPsgcName(city)}</option>)}
+                      </select>
+                      {errors.permanentCity && <p className="su-field-error">{errors.permanentCity}</p>}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Barangay</label>
+                      <input type="text" value={permanentBarangay} onChange={e => setPermanentBarangay(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.permanentBarangay ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                      {errors.permanentBarangay && <p className="su-field-error">{errors.permanentBarangay}</p>}
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Street Address</label>
+                    <input type="text" value={permanentStreet} onChange={e => setPermanentStreet(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.permanentStreet ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                    {errors.permanentStreet && <p className="su-field-error">{errors.permanentStreet}</p>}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Account Setup Section */}
@@ -914,7 +1204,7 @@ export default function UserSignup() {
                 <div className="su-row-3">
                   <div className="su-field">
                     <label>Sex</label>
-                    <select value={sex} onChange={e => setSex(e.target.value)} className={errors.sex ? 'su-input--error' : ''}>
+                    <select value={sex} onChange={e => setSex(e.target.value)} className={`su-select${errors.sex ? ' su-input--error' : ''}`}>
                       <option value="">Select...</option>
                       {SEX.map(s => <option key={s}>{s}</option>)}
                     </select>
@@ -981,17 +1271,39 @@ export default function UserSignup() {
                   {errors.contact && <p className="su-field-error">{errors.contact}</p>}
                 </div>
 
+                {/* Residency type */}
+                <div className="su-field">
+                  <label>Residency Type</label>
+                  <div className="su-residency-options">
+                    {RESIDENCY_TYPES.map(type => (
+                      <button
+                        key={type.value}
+                        type="button"
+                        className={`su-residency-option${residentType === type.value ? ' su-residency-option--active' : ''}`}
+                        onClick={() => handleResidencyTypeChange(type.value)}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                  {errors.residentType && <p className="su-field-error">{errors.residentType}</p>}
+                </div>
+
+                {residentType === 'temporary' && (
+                  <h3 className="su-address-heading">Present Address in Barangay New Cabalan</h3>
+                )}
+
                 {/* Home Address */}
                 <div className="su-field">
-                  <label>Street/Building No.</label>
-                  <input type="text" placeholder="123 Mangga St." value={homeAddress} onChange={e => setHomeAddress(e.target.value)} className={errors.homeAddress ? 'su-input--error' : ''}/>
+                  <label>House No./Street/Building No.</label>
+                  <input type="text" placeholder="123 Mangga St." value={homeAddress} onChange={e => setHomeAddress(e.target.value)} disabled={!hasSelectedResidencyType} className={errors.homeAddress ? 'su-input--error' : ''}/>
                   {errors.homeAddress && <p className="su-field-error">{errors.homeAddress}</p>}
                 </div>
 
                 {/* Purok */}
                 <div className="su-field">
                   <label>Purok</label>
-                  <select value={purok} onChange={e => setPurok(e.target.value)} className={errors.purok ? 'su-input--error' : ''}>
+                  <select value={purok} onChange={e => setPurok(e.target.value)} disabled={!hasSelectedResidencyType} className={`su-select${errors.purok ? ' su-input--error' : ''}`}>
                     <option value="">Select Purok...</option>
                     {PUROKS.map(p => <option key={p}>{p}</option>)}
                   </select>
@@ -1009,10 +1321,59 @@ export default function UserSignup() {
                   </div>
                 </div>
 
-                <div className="su-field">
-                  <label>Region</label>
-                  <input type="text" placeholder="Region" value={DEFAULT_REGION} disabled />
+                <div className="su-row-2">
+                  {residentType !== 'temporary' && (
+                    <div className="su-field">
+                      <label>Province</label>
+                      <input type="text" placeholder="Province" value={DEFAULT_PROVINCE} disabled />
+                    </div>
+                  )}
+                  <div className="su-field">
+                    <label>Region</label>
+                    <input type="text" placeholder="Region" value={DEFAULT_REGION} disabled />
+                  </div>
                 </div>
+
+                {residentType === 'temporary' && (
+                  <div className="su-permanent-address">
+                    <h3 className="su-address-heading">Permanent Address</h3>
+                    {psgcError && <p className="su-field-error">{psgcError}</p>}
+                    <div className="su-field">
+                      <label>Region</label>
+                      <select value={permanentRegionCode} onChange={e => handlePermanentRegionChange(e.target.value)} disabled={psgcLoading.regions} className={`su-select${errors.permanentRegion ? ' su-input--error' : ''}`}>
+                        <option value="">{psgcLoading.regions ? 'Loading regions...' : 'Select Region'}</option>
+                        {psgcRegions.map(region => <option key={region.code} value={region.code}>{getRegionDisplayName(region)}</option>)}
+                      </select>
+                      {errors.permanentRegion && <p className="su-field-error">{errors.permanentRegion}</p>}
+                    </div>
+                    <div className="su-field">
+                      <label>Province</label>
+                      <select value={permanentProvinceCode} onChange={e => handlePermanentProvinceChange(e.target.value)} disabled={!permanentRegionCode || psgcLoading.provinces} className={`su-select${errors.permanentProvince ? ' su-input--error' : ''}`}>
+                        <option value="">{psgcLoading.provinces ? 'Loading provinces...' : 'Select Province'}</option>
+                        {psgcProvinces.map(province => <option key={province.code} value={province.code}>{getPsgcName(province)}</option>)}
+                      </select>
+                      {errors.permanentProvince && <p className="su-field-error">{errors.permanentProvince}</p>}
+                    </div>
+                    <div className="su-field">
+                      <label>City / Municipality</label>
+                      <select value={permanentCityCode} onChange={e => handlePermanentCityChange(e.target.value)} disabled={!permanentProvinceCode || psgcLoading.cities} className={`su-select${errors.permanentCity ? ' su-input--error' : ''}`}>
+                        <option value="">{psgcLoading.cities ? 'Loading cities/municipalities...' : 'Select City / Municipality'}</option>
+                        {psgcCities.map(city => <option key={city.code} value={city.code}>{getPsgcName(city)}</option>)}
+                      </select>
+                      {errors.permanentCity && <p className="su-field-error">{errors.permanentCity}</p>}
+                    </div>
+                    <div className="su-field">
+                      <label>Barangay</label>
+                      <input type="text" placeholder="San Isidro" value={permanentBarangay} onChange={e => setPermanentBarangay(e.target.value)} className={errors.permanentBarangay ? 'su-input--error' : ''}/>
+                      {errors.permanentBarangay && <p className="su-field-error">{errors.permanentBarangay}</p>}
+                    </div>
+                    <div className="su-field">
+                      <label>Street Address</label>
+                      <input type="text" placeholder="45 Sampaguita St." value={permanentStreet} onChange={e => setPermanentStreet(e.target.value)} className={errors.permanentStreet ? 'su-input--error' : ''}/>
+                      {errors.permanentStreet && <p className="su-field-error">{errors.permanentStreet}</p>}
+                    </div>
+                  </div>
+                )}
 
               </div>
             )}

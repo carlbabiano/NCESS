@@ -27,8 +27,9 @@
 
 .su-root {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
   font-family: 'DM Sans', sans-serif;
+  overflow: hidden;
 }
 
 /* ════════════════════════════════════════════
@@ -200,11 +201,13 @@
 ════════════════════════════════════════════ */
 .su-right {
   width: 520px; min-width: 520px;
+  height: 100vh;
   background: #fff;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: flex-start; justify-content: center;
   padding: 40px 44px;
   box-shadow: -6px 0 40px rgba(0,0,0,0.08);
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .su-form-wrap {
@@ -296,7 +299,8 @@
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.su-field select {
+.su-field select,
+.su-select {
   appearance: none;
   background-color: #fff;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
@@ -305,6 +309,9 @@
   background-size: 14px;
   padding-right: 42px;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .su-field input:focus,
@@ -324,6 +331,57 @@
 .su-input--error { border-color: #ef4444 !important; }
 
 .su-field-error { font-size: 12px; color: #ef4444; font-weight: 500; margin-top: 1px; }
+
+.su-residency-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.su-residency-option {
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.su-residency-option:hover {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.su-residency-option--active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+
+.su-address-heading {
+  margin: 6px 0 0;
+  padding: 9px 12px;
+  border: 1px solid #bfdbfe;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.su-permanent-address {
+  display: contents;
+}
 
 /* Input with icon */
 .su-input-wrap { position: relative; display: flex; align-items: center; }
@@ -615,7 +673,7 @@ input.su-bday-input {
 ════════════════════════════════════════════ */
 @media (max-width: 1000px) {
   /* Stack panels vertically */
-  .su-root { flex-direction: column; }
+  .su-root { flex-direction: column; height: 100vh; overflow: hidden; }
 
   /* Left panel — visible, compact */
   .su-left {
@@ -642,14 +700,23 @@ input.su-bday-input {
   .su-features { display: none; }
 
   /* Right panel — full width, no side shadow */
-  .su-right { width: 100%; min-width: 0; padding: 32px 24px; box-shadow: none; overflow-y: visible; }
+  .su-right {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    flex: 1;
+    min-height: 0;
+    padding: 32px 24px;
+    box-shadow: none;
+    overflow-y: auto;
+  }
 
   /* Hide mobile brand — left panel handles branding */
   .su-mobile-brand { display: none; }
 }
 
 @media (max-width: 480px) {
-  .su-root { min-height: 100svh; }
+  .su-root { height: 100svh; min-height: 100svh; overflow: hidden; }
 
   /* Left panel — even more compact on small phones */
   .su-left { padding: 24px 20px 20px; }
@@ -688,6 +755,7 @@ input.su-bday-input {
   /* Grids — stack on small screens */
   .su-row-2 { grid-template-columns: 1fr; }
   .su-row-3 { grid-template-columns: 1fr; }
+  .su-residency-options { grid-template-columns: 1fr; }
 
   /* Inputs — bigger touch targets */
   .su-field input,
@@ -869,6 +937,21 @@ input.su-bday-input {
   outline: none !important;
 }
 
+.su-summary-panel select,
+.su-summary-panel .su-select {
+  appearance: none !important;
+  background-color: #fff !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 16px center !important;
+  background-size: 14px !important;
+  padding-right: 46px !important;
+  cursor: pointer !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
 .su-summary-panel input:focus,
 .su-summary-panel select:focus {
   border-color: #2563eb !important;
@@ -880,6 +963,13 @@ input.su-bday-input {
   background: #f3f4f6 !important;
   color: #6b7280 !important;
   cursor: default !important;
+}
+
+.su-summary-panel input:disabled,
+.su-summary-panel select:disabled {
+  background: #f3f4f6 !important;
+  color: #6b7280 !important;
+  cursor: not-allowed !important;
 }
 
 .su-summary-grid {
