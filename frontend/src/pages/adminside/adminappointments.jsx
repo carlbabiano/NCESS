@@ -156,6 +156,7 @@ export default function AdminAppointments() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting,     setDeleting]     = useState(false);
   const [toast,        setToast]        = useState('');
+  const [detailsAppt,  setDetailsAppt]  = useState(null);
   const [qrModalAppt,  setQrModalAppt]  = useState(null);
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [qrScanStatus, setQrScanStatus] = useState('idle');
@@ -900,6 +901,11 @@ export default function AdminAppointments() {
     setConfirmAction({ appt, action });
   };
 
+  const openDetailsModal = (appt) => {
+    setOpenMenu(null);
+    setDetailsAppt(appt);
+  };
+
   const handleConfirmAction = async () => {
     if (!confirmAction) return;
     const { appt, action } = confirmAction;
@@ -948,27 +954,22 @@ export default function AdminAppointments() {
   };
 
   const renderAppointmentActions = (appt) => (
-    appt.status === 'Scheduled' && (
-      <div style={{ position: 'relative', display: 'inline-block' }}>
-        <button className="appt-table__dots-btn"
-          onClick={e => { e.stopPropagation(); toggleMenu(appt._id); }}>
-          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-            <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-          </svg>
-        </button>
-        {openMenu === appt._id && (
-          <DropdownPortal>
-            <button className="appt-dropdown__item appt-dropdown__item--cancel-action"
-              onClick={() => { setOpenMenu(null); requestAction(appt, 'Cancelled'); }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="14" height="14">
-                <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-              </svg>
-              Cancel Appointment
-            </button>
-          </DropdownPortal>
-        )}
-      </div>
-    )
+    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+      <button
+        className="appt-table__view-btn"
+        title="Show QR Code"
+        onClick={e => { e.stopPropagation(); openQrModal(appt); }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <path d="M14 14h3v3" />
+          <path d="M21 14v7h-7" />
+          <path d="M17 17h4" />
+        </svg>
+      </button>
+    </div>
   );
 
   const renderAppointmentQrButton = (appt) => (
@@ -1209,8 +1210,9 @@ export default function AdminAppointments() {
                     <thead>
                       <tr>
                         <th>Appointment ID</th><th>Resident</th><th>Date &amp; Time Appointed</th>
-                        <th>Purpose</th><th>Status</th><th></th>
+                        <th>Purpose</th><th>Status</th><th style={{ textAlign: 'center' }}>Action</th>
                       </tr>
+
                     </thead>
                     <tbody>
                       {paginatedGroups.length === 0 && (
@@ -1225,10 +1227,7 @@ export default function AdminAppointments() {
                             <tr className={`appt-table__row${extras.length > 0 ? ' appt-table__row--group' : ''}`}>
                               <td className="appt-table__unique">
                                 {extras.length > 0 ? null : (
-                                  <>
-                                    <span className="appt-unique-id">{getAppointmentUniqueId(primary)}</span>
-                                    {renderAppointmentQrButton(primary)}
-                                  </>
+                                  <span className="appt-unique-id">{getAppointmentUniqueId(primary)}</span>
                                 )}
                               </td>
                               <td className="appt-table__resident">
@@ -1263,31 +1262,32 @@ export default function AdminAppointments() {
                                   </>
                                 ) : primary.purpose}
                               </td>
-                              <td className="appt-table__menu-cell" onClick={e => e.stopPropagation()}>
-                                {extras.length > 0 ? (
-                                  <span className="appt-group-count">
-                                    {appts.length} appointments booked
-                                  </span>
-                                ) : (
+                              <td data-label="Status">
+                                {extras.length > 0 ? null : (
                                   <span className={`appt-status-badge ${STATUS_META[primary.status]?.className || 'status--scheduled'}`}>
                                     {STATUS_META[primary.status]?.label || primary.status}
                                   </span>
                                 )}
                               </td>
-                              <td className="appt-table__menu-cell" onClick={e => e.stopPropagation()}>
+                              <td data-label="Action" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                                 {extras.length > 0 ? (
-                                  <button
-                                    className="appt-group-action"
-                                    onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
-                                    aria-label={isExpanded ? 'Hide appointments' : 'Show appointments'}
-                                    aria-expanded={isExpanded}
-                                  >
-                                    <span className={`appt-group-toggle__chevron${isExpanded ? ' appt-group-toggle__chevron--open' : ''}`}>
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                        <polyline points="9 18 15 12 9 6" />
-                                      </svg>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span className="appt-group-count">
+                                      View more ({appts.length})
                                     </span>
-                                  </button>
+                                    <button
+                                      className="appt-group-action"
+                                      onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
+                                      aria-label={isExpanded ? 'Hide appointments' : 'Show appointments'}
+                                      aria-expanded={isExpanded}
+                                    >
+                                      <span className={`appt-group-toggle__chevron${isExpanded ? ' appt-group-toggle__chevron--open' : ''}`}>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                          <polyline points="9 18 15 12 9 6" />
+                                        </svg>
+                                      </span>
+                                    </button>
+                                  </div>
                                 ) : (
                                   renderAppointmentActions(primary)
                                 )}
@@ -1301,7 +1301,6 @@ export default function AdminAppointments() {
                                       <div key={appt._id} className="appt-appointment-item">
                                         <div className="appt-appointment-item__unique">
                                           <span className="appt-unique-id">{getAppointmentUniqueId(appt)}</span>
-                                          {renderAppointmentQrButton(appt)}
                                         </div>
                                         <div className="appt-appointment-item__resident-spacer" />
                                         <div className="appt-appointment-item__datetime">
@@ -1311,11 +1310,12 @@ export default function AdminAppointments() {
                                         <div className="appt-appointment-item__main">
                                           <p className="appt-appointment-item__purpose">{appt.purpose}</p>
                                         </div>
-                                        <span className={`appt-status-badge ${STATUS_META[appt.status]?.className || 'status--scheduled'}`}>
-                                          {STATUS_META[appt.status]?.label || appt.status}
-                                        </span>
+                                        <div className="appt-appointment-item__status">
+                                          <span className={`appt-status-badge ${STATUS_META[appt.status]?.className || 'status--scheduled'}`}>
+                                            {STATUS_META[appt.status]?.label || appt.status}
+                                          </span>
+                                        </div>
                                         <div className="appt-appointment-item__actions" onClick={e => e.stopPropagation()}>
-                                          <span className="appt-appointment-item__assigned">{appt.assignedTo || 'Unassigned'}</span>
                                           {renderAppointmentActions(appt)}
                                         </div>
                                       </div>
@@ -1345,7 +1345,6 @@ export default function AdminAppointments() {
                             <div className="appt-card__resident">
                               <span className="appt-card__unique">
                                 <span className="appt-unique-id">{getAppointmentUniqueId(appt)}</span>
-                                {renderAppointmentQrButton(appt)}
                               </span>
                               <span className="appt-card__name">{appt.resident}</span>
                               {appt.residentEmail && (
@@ -1356,27 +1355,7 @@ export default function AdminAppointments() {
                               <span className={`appt-status-badge ${STATUS_META[appt.status]?.className || 'status--scheduled'}`}>
                                 {STATUS_META[appt.status]?.label || appt.status}
                               </span>
-                              {appt.status === 'Scheduled' && (
-                                <div style={{ position: 'relative', display: 'inline-block' }}>
-                                  <button className="appt-table__dots-btn"
-                                    onClick={e => { e.stopPropagation(); toggleMenu(appt._id); }}>
-                                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                                      <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-                                    </svg>
-                                  </button>
-                                  {openMenu === appt._id && (
-                                    <DropdownPortal>
-                                      <button className="appt-dropdown__item appt-dropdown__item--cancel-action"
-                                        onClick={() => { setOpenMenu(null); requestAction(appt, 'Cancelled'); }}>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" width="14" height="14">
-                                          <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-                                        </svg>
-                                        Cancel Appointment
-                                      </button>
-                                    </DropdownPortal>
-                                  )}
-                                </div>
-                              )}
+                              {renderAppointmentActions(appt)}
                             </div>
                           </div>
                           <div className="appt-card__meta">
@@ -1413,7 +1392,7 @@ export default function AdminAppointments() {
                                   )}
                                 </span>
                                 <span className="appt-card-summary__action">
-                                  <span className="appt-group-count">{appts.length} appointments booked</span>
+                                  <span className="appt-group-count">View more ({appts.length})</span>
                                   <span className={`appt-group-toggle__chevron${isExpanded ? ' appt-group-toggle__chevron--open' : ''}`}>
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                       <polyline points="9 18 15 12 9 6" />

@@ -345,33 +345,58 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 12px 18px;
+  padding: 14px 18px;
+  text-align: left;
 }
-.cmp-complaint-item__resident-spacer,
-.cmp-complaint-item__date,
-.cmp-complaint-item__main,
-.cmp-complaint-item > .cmp-table__priority,
-.cmp-complaint-item > .cmp-status,
-.cmp-complaint-item > div:last-child {
-  min-width: 0;
-  padding: 12px 18px;
+.cmp-complaint-item__resident-spacer {
+  padding: 14px 18px;
+  text-align: left;
+}
+.cmp-complaint-item__main {
+  padding: 14px 18px;
+  text-align: left;
 }
 .cmp-complaint-item__date {
   font-size: 13px;
   color: #6b7280;
   white-space: nowrap;
-}
-.cmp-complaint-item > .cmp-status {
-  justify-self: center;
+  padding: 14px 18px;
+  text-align: center;
+  min-width: 0;
 }
 .cmp-complaint-item > .cmp-table__priority {
+  padding: 14px 18px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+}
+.cmp-complaint-item > .cmp-table__priority {
+  padding: 14px 18px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  gap: 5px;
+}
+.cmp-complaint-item > .cmp-status {
+  padding: 14px 18px;
+  text-align: center;
   justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
 }
 .cmp-complaint-item > div:last-child {
   display: flex;
   align-items: center;
   justify-content: center !important;
   gap: 6px;
+  padding: 14px 18px;
+  min-width: 0;
 }
 .cmp-complaint-item__category {
   font-size: 13.5px; font-weight: 600; color: #374151; margin: 0 0 3px;
@@ -444,6 +469,7 @@
 }
 .cmp-file-modal { max-width: 620px; }
 .cmp-view-modal { max-width: 520px; }
+.cmp-qr-display-modal { max-width: 400px; }
 
 /* ─── Modal Header ───────────────────────────────── */
 .cmp-modal__header {
@@ -772,4 +798,257 @@
   /* Priority buttons */
   .cmp-priority-row { flex-wrap: wrap; height: auto; }
   .cmp-priority-btn { font-size: 12px; padding: 5px 10px; }
+}
+
+/* ─── Header actions wrapper ─────────────────────── */
+.cmp-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.cmp-header__btn--scan {
+  background: #fff;
+  color: #2563eb;
+  border: 1.5px solid #bfdbfe;
+}
+.cmp-header__btn--scan:hover { background: #eff6ff !important; }
+.cmp-header__btn--scan svg { stroke: #2563eb; }
+
+/* ─── QR Scan Modal ──────────────────────────────── */
+.cmp-qr-overlay { z-index: 12000; }
+
+.cmp-qr-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: min(720px, calc(100vw - 32px));
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+.cmp-qr-modal__body {
+  display: grid;
+  gap: 18px;
+  padding: 22px 24px 24px;
+  overflow-y: auto;
+}
+.cmp-qr-modal__body--scanner-only {
+  grid-template-columns: minmax(280px, 420px);
+  justify-content: center;
+}
+.cmp-qr-modal__body--with-result {
+  grid-template-columns: minmax(260px, 0.9fr) minmax(280px, 1.1fr);
+}
+
+.cmp-qr-scan-panel,
+.cmp-qr-details {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+  padding: 14px;
+}
+
+.cmp-qr-scanner-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.cmp-qr-scanner-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #374151;
+  background: #f3f4f6;
+  border-radius: 20px;
+  padding: 5px 14px;
+}
+
+.cmp-qr-live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: cmpQrPulse 1.4s ease-in-out infinite;
+}
+
+.cmp-qr-scanner-viewport {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 10px 30px rgba(15,23,42,0.18);
+}
+
+.cmp-qr-scanner-region,
+.cmp-qr-scanner-region > div,
+.cmp-qr-scanner-region video {
+  width: 100% !important;
+  height: 100% !important;
+}
+.cmp-qr-scanner-region video { object-fit: cover; }
+
+.cmp-qr-corner {
+  position: absolute;
+  width: 28px; height: 28px;
+  z-index: 10;
+  pointer-events: none;
+}
+.cmp-qr-corner--tl { top: 10px; left: 10px; border-top: 3px solid #2563eb; border-left: 3px solid #2563eb; border-radius: 4px 0 0 0; }
+.cmp-qr-corner--tr { top: 10px; right: 10px; border-top: 3px solid #2563eb; border-right: 3px solid #2563eb; border-radius: 0 4px 0 0; }
+.cmp-qr-corner--bl { bottom: 10px; left: 10px; border-bottom: 3px solid #2563eb; border-left: 3px solid #2563eb; border-radius: 0 0 0 4px; }
+.cmp-qr-corner--br { bottom: 10px; right: 10px; border-bottom: 3px solid #2563eb; border-right: 3px solid #2563eb; border-radius: 0 0 4px 0; }
+
+.cmp-qr-scan-line {
+  position: absolute;
+  left: 10px; right: 10px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #2563eb, transparent);
+  border-radius: 2px;
+  top: 10px;
+  z-index: 10;
+  pointer-events: none;
+  animation: cmpQrSweep 2s linear infinite;
+  box-shadow: 0 0 8px rgba(37,99,235,0.5);
+}
+
+.cmp-qr-scanner {
+  min-height: 260px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cmp-qr-scanner--success { background: #ecfdf5; color: #047857; }
+
+.cmp-qr-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.cmp-qr-success svg { width: 44px; height: 44px; }
+
+.cmp-qr-error {
+  color: #dc2626;
+  font-size: 12.5px;
+  font-weight: 600;
+  margin: 10px 0 0;
+  line-height: 1.4;
+}
+
+.cmp-qr-permission {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  color: #374151;
+}
+.cmp-qr-permission__icon {
+  width: 68px; height: 68px;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: cmpQrPulse 2s ease-in-out infinite;
+}
+.cmp-qr-permission__icon svg { width: 30px; height: 30px; }
+.cmp-qr-permission h3 { margin: 4px 0 0; font-size: 16px; color: #111827; }
+.cmp-qr-permission p { margin: 0; font-size: 13px; color: #6b7280; line-height: 1.5; max-width: 280px; }
+.cmp-qr-permission--error .cmp-qr-permission__icon { background: #fef2f2; color: #dc2626; }
+
+@keyframes cmpQrPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.06); }
+}
+@keyframes cmpQrSweep {
+  0%   { top: 10px; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: calc(100% - 12px); opacity: 0; }
+}
+
+.cmp-qr-rescan {
+  margin-top: 12px;
+  width: 100%;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.cmp-qr-details {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.cmp-qr-preview {
+  width: 112px; height: 112px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cmp-qr-detail-grid {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 10px 14px;
+  align-items: baseline;
+}
+.cmp-qr-detail-grid span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.cmp-qr-detail-grid strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+/* ─── QR Scan Modal – Mobile ─────────────────────── */
+@media (max-width: 600px) {
+  .cmp-qr-modal {
+    width: calc(100vw - 32px);
+  }
+  .cmp-qr-modal__body,
+  .cmp-qr-modal__body--scanner-only,
+  .cmp-qr-modal__body--with-result {
+    grid-template-columns: 1fr;
+  }
+  .cmp-qr-details {
+    grid-template-columns: 1fr;
+  }
+  .cmp-qr-preview {
+    margin: 0 auto;
+  }
 }

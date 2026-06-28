@@ -1,5 +1,7 @@
-import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
+import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { io } from 'socket.io-client';
+import QRCode from 'react-qr-code';
+import { Html5Qrcode } from 'html5-qrcode';
 import Sidebar from '../../components/adminsidebar';
 import AdminTopbar from '../../components/admintopbar';
 import { AdminFilterBar } from '../../components/adminfilterbar';
@@ -85,6 +87,17 @@ function formatFiledTime(complaint) {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+function getComplaintQrValue(complaint) {
+  const id = complaint.id || complaint._id || '';
+  return `CMP:${id}`;
+}
+
+function readComplaintQrValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return raw.startsWith('CMP:') ? raw.slice(4) : raw;
+}
+
 function buildResidentGroups(list) {
   const grouped = new Map();
 
@@ -164,7 +177,129 @@ export default function AdminComplaints() {
   const [deleting,     setDeleting]     = useState(false);
   const [adminRole,    setAdminRole]    = useState(null);
 
+  // QR modal
+  const [qrModalComplaint, setQrModalComplaint] = useState(null);
+
+  // QR scan modal
+  const [scanModalOpen,  setScanModalOpen]  = useState(false);
+  const [qrScanStatus,   setQrScanStatus]   = useState('idle');
+  const [qrScanError,    setQrScanError]    = useState('');
+  const [qrScanResult,   setQrScanResult]   = useState(null);
+  const qrScannerRef  = useRef(null);
+  const qrScanLockRef = useRef(false);
+
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 3500); };
+
+  /* ── QR Scan handlers ── */
+  const findComplaintByQr = useCallback((decodedValue) => {
+    const id = readComplaintQrValue(decodedValue).toLowerCase();
+    return complaints.find(c =>
+      String(c.id || '').toLowerCase() === id ||
+      String(c._id || '').toLowerCase() === id
+    ) || null;
+  }, [complaints]);
+
+  const stopQrScanner = useCallback(async () => {
+    if (!qrScannerRef.current) return;
+    try {
+      const state = qrScannerRef.current.getState?.();
+      if (state === 2 || state === 3) await qrScannerRef.current.stop();
+    } catch { /* ignore */ }
+    try { qrScannerRef.current.clear(); } catch { /* ignore */ }
+    qrScannerRef.current = null;
+  }, []);
+
+  const closeScanModal = useCallback(async () => {
+    await stopQrScanner();
+    qrScanLockRef.current = false;
+    setScanModalOpen(false);
+    setQrScanStatus('idle');
+    setQrScanError('');
+    setQrScanResult(null);
+  }, [stopQrScanner]);
+
+  const openScanModal = () => {
+    qrScanLockRef.current = false;
+    setScanModalOpen(true);
+    setQrScanResult(null);
+    setQrScanError('');
+    setQrScanStatus('requesting');
+  };
+
+  const handleQrDecoded = useCallback(async (decodedText) => {
+    if (qrScanLockRef.current) return;
+    qrScanLockRef.current = true;
+    const matched = findComplaintByQr(decodedText);
+    if (!matched) {
+      setQrScanResult(null);
+      setQrScanError('No complaint matched this QR code.');
+      setTimeout(() => { qrScanLockRef.current = false; setQrScanError(''); }, 1800);
+      return;
+    }
+    setQrScanResult(matched);
+    setQrScanError('');
+    setQrScanStatus('success');
+    await stopQrScanner();
+  }, [findComplaintByQr, stopQrScanner]);
+
+  useEffect(() => {
+    if (!scanModalOpen || qrScanStatus !== 'requesting') return undefined;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const constraints = { video: { facingMode: 'environment', width: { min: 320, ideal: 640, max: 1280 }, height: { min: 240, ideal: 480, max: 960 } } };
+        let stream;
+        try { stream = await navigator.mediaDevices.getUserMedia(constraints); }
+        catch { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); }
+        stream.getTracks().forEach(t => t.stop());
+        if (!cancelled) setQrScanStatus('scanning');
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+          setQrScanStatus('denied'); setQrScanError('Camera permission was denied. Allow camera access and try again.');
+        } else {
+          setQrScanStatus('error'); setQrScanError('Could not access camera. Please check your device settings.');
+        }
+      }
+    }, 120);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [scanModalOpen, qrScanStatus]);
+
+  useEffect(() => {
+    if (!scanModalOpen || qrScanStatus !== 'scanning') return undefined;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const el = document.getElementById('cmp-qr-scanner');
+      if (!el || cancelled) return;
+      try {
+        const scanner = new Html5Qrcode('cmp-qr-scanner', { verbose: false });
+        qrScannerRef.current = scanner;
+        try {
+          await scanner.start({ facingMode: 'environment', width: { min: 320, ideal: 640, max: 1280 }, height: { min: 240, ideal: 480, max: 960 } },
+            { fps: 15, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, disableFlip: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
+            handleQrDecoded, () => {});
+        } catch {
+          try { await scanner.stop(); } catch { /* ignore */ }
+          try { await scanner.clear(); } catch { /* ignore */ }
+          await new Promise(r => setTimeout(r, 300));
+          const retry = new Html5Qrcode('cmp-qr-scanner', { verbose: false });
+          qrScannerRef.current = retry;
+          await retry.start({ facingMode: 'environment' }, { fps: 15, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, disableFlip: false }, handleQrDecoded, () => {});
+        }
+      } catch (err) {
+        if (!cancelled) {
+          if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+            setQrScanStatus('denied'); setQrScanError('Camera permission was denied. Allow camera access and try again.');
+          } else {
+            setQrScanStatus('error'); setQrScanError('Could not start camera. Please try again.');
+          }
+        }
+      }
+    }, 150);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [scanModalOpen, qrScanStatus, handleQrDecoded]);
+
+  useEffect(() => () => { stopQrScanner(); }, [stopQrScanner]);
 
   // Get current admin's role
   useEffect(() => {
@@ -361,8 +496,43 @@ export default function AdminComplaints() {
     });
   };
 
+  const openQrModal = (complaint) => {
+    setQrModalComplaint(complaint);
+  };
+
+  const renderComplaintQrButton = (complaint) => (
+    <button
+      className="cmp-table__view-btn"
+      title="Show QR Code"
+      onClick={() => openQrModal(complaint)}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <path d="M14 14h3v3" />
+        <path d="M21 14v7h-7" />
+        <path d="M17 17h4" />
+      </svg>
+    </button>
+  );
+
   const renderActionButtons = (complaint) => (
     <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+      <button
+        className="cmp-table__view-btn"
+        title="Show QR Code"
+        onClick={() => openQrModal(complaint)}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <path d="M14 14h3v3" />
+          <path d="M21 14v7h-7" />
+          <path d="M17 17h4" />
+        </svg>
+      </button>
       <button
         className="cmp-table__view-btn"
         title="View Details"
@@ -423,12 +593,24 @@ export default function AdminComplaints() {
               <p>Monitor and resolve barangay complaints filed by residents.</p>
             </div>
             {canEdit && (
-              <button className="cmp-header__btn" onClick={openFileModal}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                File Complaint
-              </button>
+              <div className="cmp-header__actions">
+                <button className="cmp-header__btn cmp-header__btn--scan" onClick={openScanModal}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                    <path d="M4 7V5a1 1 0 0 1 1-1h2" />
+                    <path d="M17 4h2a1 1 0 0 1 1 1v2" />
+                    <path d="M20 17v2a1 1 0 0 1-1 1h-2" />
+                    <path d="M7 20H5a1 1 0 0 1-1-1v-2" />
+                    <path d="M7 12h10" />
+                  </svg>
+                  Scan QR
+                </button>
+                <button className="cmp-header__btn" onClick={openFileModal}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  File Complaint
+                </button>
+              </div>
             )}
           </div>
 
@@ -546,12 +728,7 @@ export default function AdminComplaints() {
                               <div className="cmp-table__avatar-placeholder">
                                 {(group.resident || '?').charAt(0).toUpperCase()}
                               </div>
-                              <div className="cmp-group-toggle__text">
-                                <p className="cmp-table__name">{group.resident}</p>
-                                {isGrouped && (
-                                  <span className="cmp-group-count">{group.complaints.length} complaints filed</span>
-                                )}
-                              </div>
+                              <p className="cmp-table__name">{group.resident}</p>
                             </div>
                           </td>
                           <td data-label="Complaint" className="cmp-table__category">
@@ -572,18 +749,21 @@ export default function AdminComplaints() {
                           <td data-label="Date Filed" className="cmp-table__date">{c.dateFiled}</td>
                           <td>
                             {isGrouped ? (
-                              <button
-                                className="cmp-group-action"
-                                onClick={() => toggleGroup(group.key)}
-                                aria-label={isOpen ? 'Hide complaints' : 'Show complaints'}
-                                aria-expanded={isOpen}
-                              >
-                                <span className={`cmp-group-toggle__chevron${isOpen ? ' cmp-group-toggle__chevron--open' : ''}`}>
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <polyline points="9 18 15 12 9 6" />
-                                  </svg>
-                                </span>
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span className="cmp-group-count">View more ({group.complaints.length})</span>
+                                <button
+                                  className="cmp-group-action"
+                                  onClick={() => toggleGroup(group.key)}
+                                  aria-label={isOpen ? 'Hide complaints' : 'Show complaints'}
+                                  aria-expanded={isOpen}
+                                >
+                                  <span className={`cmp-group-toggle__chevron${isOpen ? ' cmp-group-toggle__chevron--open' : ''}`}>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="9 18 15 12 9 6" />
+                                    </svg>
+                                  </span>
+                                </button>
+                              </div>
                             ) : (
                               renderActionButtons(c)
                             )}
@@ -651,6 +831,120 @@ export default function AdminComplaints() {
             Showing <strong>{filtered.length}</strong> of <strong>{complaints.length}</strong> complaints
           </div>
         </div>
+
+        {/* ══ QR SCAN MODAL ══════════════════════════ */}
+        {scanModalOpen && (() => {
+          const detailComplaint = qrScanResult;
+          return (
+            <div className="cmp-overlay cmp-qr-overlay" onClick={closeScanModal}>
+              <div className="cmp-qr-modal" onClick={e => e.stopPropagation()}>
+                <div className="cmp-modal__header">
+                  <div>
+                    <h2 className="cmp-modal__title">Scan Complaint QR</h2>
+                    <p className="cmp-modal__subtitle">Scan a QR code to show the complaint details.</p>
+                  </div>
+                  <button className="cmp-modal__close" onClick={closeScanModal}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+                <div className={`cmp-qr-modal__body${detailComplaint ? ' cmp-qr-modal__body--with-result' : ' cmp-qr-modal__body--scanner-only'}`}>
+                  <div className="cmp-qr-scan-panel">
+                    {qrScanStatus === 'requesting' && (
+                      <div className="cmp-qr-permission">
+                        <div className="cmp-qr-permission__icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M23 7l-7 5 7 5V7z" />
+                            <rect x="1" y="5" width="15" height="14" rx="2" />
+                          </svg>
+                        </div>
+                        <h3>Requesting camera access</h3>
+                        <p>Allow camera permission to scan complaint QR codes.</p>
+                      </div>
+                    )}
+                    {qrScanStatus === 'scanning' && (
+                      <div className="cmp-qr-scanner-wrap">
+                        <div className="cmp-qr-scanner-label">
+                          <span className="cmp-qr-live-dot" />
+                          Camera is scanning
+                        </div>
+                        <div className="cmp-qr-scanner-viewport">
+                          <div id="cmp-qr-scanner" className="cmp-qr-scanner-region" />
+                          <span className="cmp-qr-corner cmp-qr-corner--tl" />
+                          <span className="cmp-qr-corner cmp-qr-corner--tr" />
+                          <span className="cmp-qr-corner cmp-qr-corner--bl" />
+                          <span className="cmp-qr-corner cmp-qr-corner--br" />
+                          <span className="cmp-qr-scan-line" />
+                        </div>
+                      </div>
+                    )}
+                    {qrScanStatus === 'success' && (
+                      <div className="cmp-qr-scanner cmp-qr-scanner--success">
+                        <div className="cmp-qr-success">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="8 12.5 11 15.5 16.5 9" />
+                          </svg>
+                          <span>QR matched</span>
+                        </div>
+                      </div>
+                    )}
+                    {(qrScanStatus === 'error' || qrScanStatus === 'denied') && (
+                      <div className="cmp-qr-permission cmp-qr-permission--error">
+                        <div className="cmp-qr-permission__icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                        </div>
+                        <h3>{qrScanStatus === 'denied' ? 'Camera blocked' : 'Scanner unavailable'}</h3>
+                      </div>
+                    )}
+                    {qrScanError && <p className="cmp-qr-error">{qrScanError}</p>}
+                    {qrScanStatus === 'success' && (
+                      <button className="cmp-qr-rescan" onClick={() => {
+                        qrScanLockRef.current = false;
+                        setQrScanResult(null);
+                        setQrScanStatus('requesting');
+                      }}>Scan Again</button>
+                    )}
+                    {(qrScanStatus === 'error' || qrScanStatus === 'denied') && (
+                      <button className="cmp-qr-rescan" onClick={() => {
+                        qrScanLockRef.current = false;
+                        setQrScanResult(null);
+                        setQrScanError('');
+                        setQrScanStatus('requesting');
+                      }}>Try Again</button>
+                    )}
+                  </div>
+                  {detailComplaint && (
+                    <div className="cmp-qr-details">
+                      <div className="cmp-qr-preview">
+                        <QRCode value={getComplaintQrValue(detailComplaint)} size={96} />
+                      </div>
+                      <div className="cmp-qr-detail-grid">
+                        <span>Complaint ID</span>
+                        <strong>{detailComplaint.id || detailComplaint._id}</strong>
+                        <span>Resident</span>
+                        <strong>{detailComplaint.resident || 'Unknown'}</strong>
+                        <span>Category</span>
+                        <strong>{detailComplaint.category || '—'}</strong>
+                        <span>Date Filed</span>
+                        <strong>{detailComplaint.dateFiled || '—'}</strong>
+                        <span>Status</span>
+                        <strong>{detailComplaint.status || 'Pending'}</strong>
+                        <span>Assigned To</span>
+                        <strong>{detailComplaint.assignedOfficial || 'Unassigned'}</strong>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ══ FILE COMPLAINT MODAL ═══════════════════ */}
         {showFileModal && (
@@ -925,6 +1219,37 @@ export default function AdminComplaints() {
                 <button className="cmp-confirm-modal__delete" onClick={handleDelete} disabled={deleting}>
                   {deleting ? 'Deleting…' : 'Yes, Delete'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══ QR CODE MODAL ═════════════════════════ */}
+        {qrModalComplaint && (
+          <div className="cmp-overlay" onClick={() => setQrModalComplaint(null)}>
+            <div className="cmp-modal cmp-qr-display-modal" onClick={e => e.stopPropagation()}>
+              <div className="cmp-modal__header">
+                <div>
+                  <h2 className="cmp-modal__title">Complaint QR Code</h2>
+                  <p className="cmp-modal__subtitle">{qrModalComplaint.id || qrModalComplaint._id}</p>
+                </div>
+                <button className="cmp-modal__close" onClick={() => setQrModalComplaint(null)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              <div className="cmp-modal__body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                <div style={{ padding: 16, background: '#fff', borderRadius: 10, border: '1px solid #e9ecef' }}>
+                  <QRCode value={getComplaintQrValue(qrModalComplaint)} size={256} />
+                </div>
+                <div style={{ width: '100%', textAlign: 'center' }}>
+                  <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 8px' }}>COMPLAINT ID</p>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: '#111827', margin: 0 }}>{qrModalComplaint.id || qrModalComplaint._id}</p>
+                </div>
+              </div>
+              <div className="cmp-modal__footer">
+                <button className="cmp-modal__submit" onClick={() => setQrModalComplaint(null)}>Done</button>
               </div>
             </div>
           </div>
