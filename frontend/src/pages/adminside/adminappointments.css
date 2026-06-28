@@ -2462,7 +2462,7 @@
   border-color: #bfdbfe;
 }
 .appt-dropdown-row td {
-  padding: 10px 0 14px;
+  padding: 8px 12px 12px;
   background: #f9fafb;
   border: none;
   border-radius: 0;
@@ -2472,8 +2472,8 @@
   flex-direction: column;
   gap: 0;
   padding: 0;
-  background: #f8fbff;
-  border: 1px solid #dbeafe;
+  background: #fff;
+  border: 1px solid #eef2f7;
   border-radius: 10px;
   overflow: hidden;
 }
@@ -2483,13 +2483,13 @@
   align-items: center;
   gap: 0;
   padding: 0;
-  background: #f8fbff;
+  background: #fff;
   border: none;
-  border-bottom: 1px solid #dbeafe;
+  border-bottom: 1px solid #eef2f7;
   border-radius: 0;
 }
 .appt-appointment-item:hover {
-  background: #f3f7ff;
+  background: #fafafa;
 }
 .appt-appointment-item:first-child { border-radius: 0; }
 .appt-appointment-item:last-child {

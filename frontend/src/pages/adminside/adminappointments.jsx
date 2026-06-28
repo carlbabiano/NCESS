@@ -1208,7 +1208,7 @@ export default function AdminAppointments() {
                   <table className="appt-table appt-table--desktop">
                     <thead>
                       <tr>
-                        <th>UniqueID</th><th>Resident</th><th>Date &amp; Time Appointed</th>
+                        <th>Appointment ID</th><th>Resident</th><th>Date &amp; Time Appointed</th>
                         <th>Purpose</th><th>Status</th><th></th>
                       </tr>
                     </thead>

@@ -74,38 +74,39 @@ function getResidentGroupKey(complaint) {
   return `name:${resident || complaint._id}`;
 }
 
+function complaintSortKey(complaint) {
+  return new Date(complaint.createdAt || complaint.dateFiled || 0).getTime() || 0;
+}
+
+function formatFiledTime(complaint) {
+  if (!complaint?.createdAt) return '';
+  const d = new Date(complaint.createdAt);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
 function buildResidentGroups(list) {
   const grouped = new Map();
 
   list.forEach((complaint) => {
     const key = getResidentGroupKey(complaint);
-    const existing = grouped.get(key);
-
-    if (existing) {
-      existing.complaints.push(complaint);
-      return;
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        key,
+        resident: complaint.resident || 'Unknown Resident',
+        residentEmail: complaint.residentEmail || '',
+        complaints: [],
+      });
     }
 
-    grouped.set(key, {
-      key,
-      resident: complaint.resident || 'Unknown Resident',
-      residentEmail: complaint.residentEmail || '',
-      complaints: [complaint],
-    });
+    grouped.get(key).complaints.push(complaint);
   });
 
   return Array.from(grouped.values()).map((group) => {
-    const counts = {
-      pending: group.complaints.filter(c => c.status === 'Pending').length,
-      inProgress: group.complaints.filter(c => c.status === 'In Progress').length,
-      resolved: group.complaints.filter(c => c.status === 'Resolved').length,
-      escalated: group.complaints.filter(c => c.status === 'Escalated').length,
-    };
-
+    group.complaints.sort((a, b) => complaintSortKey(b) - complaintSortKey(a));
     return {
       ...group,
       latest: group.complaints[0],
-      counts,
     };
   });
 }
@@ -145,7 +146,7 @@ export default function AdminComplaints() {
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [page,           setPage]           = useState(1);
-  const [expandedGroups, setExpandedGroups] = useState({});
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
   const [toast,          setToast]          = useState('');
 
   // File complaint modal
@@ -257,7 +258,7 @@ export default function AdminComplaints() {
 
   const totalPages = Math.max(1, Math.ceil(groupedComplaints.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);
-  const paginated  = groupedComplaints.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginatedGroups  = groupedComplaints.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   /* ── File modal handlers ── */
   const openFileModal  = () => { setForm(EMPTY_FORM); setFormError(''); setShowFileModal(true); };
@@ -353,7 +354,11 @@ export default function AdminComplaints() {
   };
 
   const toggleGroup = (groupKey) => {
-    setExpandedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey);
+      return next;
+    });
   };
 
   const renderActionButtons = (complaint) => (
@@ -510,45 +515,54 @@ export default function AdminComplaints() {
               <table className="cmp-table">
                 <thead>
                   <tr>
+                    <th>Complaint ID</th>
                     <th>Resident</th>
-                    <th>Category</th>
+                    <th>Complaint</th>
+                    <th>Priority</th>
                     <th>Status</th>
                     <th>Date Filed</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginated.length === 0 && (
-                    <tr><td colSpan="5" className="cmp-table__empty">No complaints found.</td></tr>
+                  {paginatedGroups.length === 0 && (
+                    <tr><td colSpan="7" className="cmp-table__empty">No complaints found.</td></tr>
                   )}
-                  {paginated.map(group => {
+                  {paginatedGroups.map(group => {
                     const c = group.latest;
-                    const sm = STATUS_META[c.status]   || STATUS_META['Pending'];
+                    const extras = group.complaints.slice(1);
+                    const isGrouped = extras.length > 0;
+                    const isOpen = expandedGroups.has(group.key);
+                    const sm = STATUS_META[c.status] || STATUS_META['Pending'];
                     const pm = PRIORITY_META[c.priority] || PRIORITY_META['Medium'];
-                    const isGrouped = group.complaints.length > 1;
-                    const isOpen = !!expandedGroups[group.key];
-
-                    if (!isGrouped) {
-                      return (
-                        <tr key={c._id} className="cmp-table__row">
-                          <td>
+                    return (
+                      <Fragment key={group.key}>
+                        <tr className={`cmp-table__row${isGrouped ? ' cmp-table__row--group' : ''}`}>
+                          <td data-label="Complaint ID" className="cmp-table__id">
+                            {isGrouped ? null : (c.id || c._id)}
+                          </td>
+                          <td data-label="Resident">
                             <div className="cmp-table__resident">
                               <div className="cmp-table__avatar-placeholder">
-                                {(c.resident || '?').charAt(0).toUpperCase()}
+                                {(group.resident || '?').charAt(0).toUpperCase()}
                               </div>
-                              <div>
-                                <p className="cmp-table__name">{c.resident}</p>
-                                {c.residentEmail && (
-                                  <p className="cmp-table__email">{c.residentEmail}</p>
+                              <div className="cmp-group-toggle__text">
+                                <p className="cmp-table__name">{group.resident}</p>
+                                {isGrouped && (
+                                  <span className="cmp-group-count">{group.complaints.length} complaints filed</span>
                                 )}
-                                <p className="cmp-table__priority">
-                                  <span className="cmp-priority-dot" style={{ background: pm.dot }} />
-                                  {c.priority}
-                                </p>
                               </div>
                             </div>
                           </td>
-                          <td data-label="Category" className="cmp-table__category">{c.category}</td>
+                          <td data-label="Complaint" className="cmp-table__category">
+                            {isGrouped ? `Latest: ${c.category}` : c.category}
+                          </td>
+                          <td data-label="Priority">
+                            <span className="cmp-table__priority">
+                              <span className="cmp-priority-dot" style={{ background: pm.dot }} />
+                              {c.priority}
+                            </span>
+                          </td>
                           <td data-label="Status">
                             <span className={`cmp-status ${sm.className}`}>
                               <span className="cmp-status__icon"><StatusIcon type={sm.icon} /></span>
@@ -556,53 +570,28 @@ export default function AdminComplaints() {
                             </span>
                           </td>
                           <td data-label="Date Filed" className="cmp-table__date">{c.dateFiled}</td>
-                          <td>{renderActionButtons(c)}</td>
-                        </tr>
-                      );
-                    }
-
-                    return (
-                      <Fragment key={group.key}>
-                        <tr className="cmp-table__row cmp-table__row--group">
                           <td>
-                            <button
-                              type="button"
-                              className="cmp-group-toggle"
-                              onClick={() => toggleGroup(group.key)}
-                            >
-                              <span className={`cmp-group-toggle__chevron${isOpen ? ' cmp-group-toggle__chevron--open' : ''}`}>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <polyline points="9 18 15 12 9 6" />
-                                </svg>
-                              </span>
-                              <span className="cmp-table__avatar-placeholder">
-                                {(group.resident || '?').charAt(0).toUpperCase()}
-                              </span>
-                              <span className="cmp-group-toggle__text">
-                                <span className="cmp-table__name">{group.resident}</span>
-                                {group.residentEmail && (
-                                  <span className="cmp-table__email">{group.residentEmail}</span>
-                                )}
-                                <span className="cmp-group-count">{group.complaints.length} complaints filed</span>
-                              </span>
-                            </button>
-                          </td>
-                          <td data-label="Category" className="cmp-table__category">Latest: {c.category}</td>
-                          <td data-label="Status">
-                            <span className="cmp-group-status">
-                              {group.counts.pending} pending · {group.counts.inProgress} active · {group.counts.resolved} resolved
-                            </span>
-                          </td>
-                          <td data-label="Date Filed" className="cmp-table__date">{c.dateFiled}</td>
-                          <td>
-                            <button className="cmp-group-action" onClick={() => toggleGroup(group.key)}>
-                              {isOpen ? 'Hide' : 'Show'} complaints
-                            </button>
+                            {isGrouped ? (
+                              <button
+                                className="cmp-group-action"
+                                onClick={() => toggleGroup(group.key)}
+                                aria-label={isOpen ? 'Hide complaints' : 'Show complaints'}
+                                aria-expanded={isOpen}
+                              >
+                                <span className={`cmp-group-toggle__chevron${isOpen ? ' cmp-group-toggle__chevron--open' : ''}`}>
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <polyline points="9 18 15 12 9 6" />
+                                  </svg>
+                                </span>
+                              </button>
+                            ) : (
+                              renderActionButtons(c)
+                            )}
                           </td>
                         </tr>
-                        {isOpen && (
+                        {isOpen && isGrouped && (
                           <tr className="cmp-dropdown-row">
-                            <td colSpan="5">
+                            <td colSpan="7">
                               <div className="cmp-complaint-list">
                                 {group.complaints.map(item => {
                                   const itemStatus = STATUS_META[item.status] || STATUS_META['Pending'];
@@ -610,11 +599,10 @@ export default function AdminComplaints() {
 
                                   return (
                                     <div key={item._id} className="cmp-complaint-item">
+                                      <div className="cmp-complaint-item__id">{item.id || item._id}</div>
+                                      <div className="cmp-complaint-item__resident-spacer" />
                                       <div className="cmp-complaint-item__main">
                                         <p className="cmp-complaint-item__category">{item.category}</p>
-                                        <p className="cmp-complaint-item__meta">
-                                          {item.dateFiled}{item.location ? ` · ${item.location}` : ''}
-                                        </p>
                                       </div>
                                       <span className="cmp-table__priority">
                                         <span className="cmp-priority-dot" style={{ background: itemPriority.dot }} />
@@ -624,6 +612,7 @@ export default function AdminComplaints() {
                                         <span className="cmp-status__icon"><StatusIcon type={itemStatus.icon} /></span>
                                         {item.status}
                                       </span>
+                                      <div className="cmp-complaint-item__date">{item.dateFiled}</div>
                                       {renderActionButtons(item)}
                                     </div>
                                   );
@@ -853,6 +842,12 @@ export default function AdminComplaints() {
                     <span className="cmp-view-item__label">Date Filed</span>
                     <span className="cmp-view-item__value">{viewTarget.dateFiled}</span>
                   </div>
+                  {formatFiledTime(viewTarget) && (
+                    <div className="cmp-view-item">
+                      <span className="cmp-view-item__label">Time Filed</span>
+                      <span className="cmp-view-item__value">{formatFiledTime(viewTarget)}</span>
+                    </div>
+                  )}
                   <div className="cmp-view-item">
                     <span className="cmp-view-item__label">Assigned To</span>
                     <span className="cmp-view-item__value">{viewTarget.assignedOfficial}</span>
