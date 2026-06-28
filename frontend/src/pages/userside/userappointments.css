@@ -567,3 +567,96 @@
 @media (max-width: 480px) {
   .uapt-header h1 { font-size: 18px; }
 }
+/* ─── Appointment ID ─────────────────────────────── */
+.uapt-appt-id {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+.uapt-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* ─── QR dropdown item ───────────────────────────── */
+.uapt-dropdown__item--qr { color: #7c3aed; }
+.uapt-dropdown__item--qr:hover { background: #f5f3ff; }
+
+/* ─── QR Modal ───────────────────────────────────── */
+.uapt-modal--qr { max-width: 400px; }
+
+.uapt-qr-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  margin: 2px 0 0;
+}
+
+.uapt-qr-body {
+  align-items: center;
+  gap: 18px !important;
+}
+
+.uapt-qr-code-wrap {
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.uapt-qr-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.uapt-qr-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.uapt-qr-row:last-child { border-bottom: none; }
+.uapt-qr-row span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+.uapt-qr-row strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  text-align: right;
+}
+
+.uapt-qr-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.uapt-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

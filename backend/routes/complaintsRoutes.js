@@ -26,7 +26,9 @@ function normalizePriority(priority) {
 function getResidentPriority(category, priority) {
   if (DEFAULT_PRIORITY_BY_CATEGORY[category]) return getDefaultPriority(category);
   const normalizedPriority = normalizePriority(priority);
-  return ['Normal', 'Medium', 'High'].includes(normalizedPriority) ? normalizedPriority : DEFAULT_PRIORITY_BY_CATEGORY.Other;
+  return ['Normal', 'Medium', 'High'].includes(normalizedPriority)
+    ? normalizedPriority
+    : DEFAULT_PRIORITY_BY_CATEGORY.Other;
 }
 
 /* ── Auth helpers ─────────────────────────────────────────────────────────── */
@@ -62,7 +64,12 @@ function serialize(doc) {
   const o = doc.toObject ? doc.toObject() : { ...doc };
   return {
     _id:              o._id,
-    id:               `CMP-${String(o._id).slice(-6).toUpperCase()}`,
+    // uniqueID is the permanent stored ID — used as the QR identifier on both
+    // user and admin sides. Falls back to the derived format for legacy docs
+    // that existed before the uniqueID field was added to the schema.
+    uniqueID:         o.uniqueID || `CMP-${String(o._id).slice(-6).toUpperCase()}`,
+    // Keep `id` for any existing UI code that still reads it
+    id:               o.uniqueID || `CMP-${String(o._id).slice(-6).toUpperCase()}`,
     resident:         o.resident,
     residentEmail:    o.residentEmail || '',
     userId:           o.userId,
@@ -96,10 +103,22 @@ router.get('/admin/complaints', verifyAdmin, async (req, res) => {
         { resident:  { $regex: search, $options: 'i' } },
         { category:  { $regex: search, $options: 'i' } },
         { location:  { $regex: search, $options: 'i' } },
+        { uniqueID:  { $regex: search, $options: 'i' } },
       ];
     }
     const docs = await Complaint.find(query).sort({ createdAt: -1 });
     res.json(docs.map(serialize));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET single complaint by uniqueID — used by QR scanner on admin side
+router.get('/admin/complaints/by-qr/:uniqueID', verifyAdmin, async (req, res) => {
+  try {
+    const doc = await Complaint.findOne({ uniqueID: req.params.uniqueID });
+    if (!doc) return res.status(404).json({ message: 'Complaint not found.' });
+    res.json(serialize(doc));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -155,15 +174,12 @@ router.patch('/admin/complaints/:id/status', verifyAdmin, async (req, res) => {
 
     const serialized = serialize(doc);
 
-    // Notify the user whose complaint status changed (skip walk-in complaints with no userId)
     if (doc.userId && prevStatus !== status) {
       req.app.get('io')?.to(`user_${doc.userId}`).emit('complaint_status_updated', {
         ...serialized,
         prevStatus,
       });
     }
-
-    // Also notify all admin clients so other open admin tabs stay in sync
     req.app.get('io')?.to('admin_room').emit('complaint_updated', serialized);
 
     res.json(serialized);
@@ -183,7 +199,6 @@ router.patch('/admin/complaints/:id', verifyAdmin, async (req, res) => {
     if (!doc) return res.status(404).json({ message: 'Not found.' });
     const serialized = serialize(doc);
 
-    // Keep all admin tabs in sync
     req.app.get('io')?.to('admin_room').emit('complaint_updated', serialized);
 
     res.json(serialized);
@@ -198,7 +213,6 @@ router.delete('/admin/complaints/:id', verifyAdmin, async (req, res) => {
     const doc = await Complaint.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ message: 'Not found.' });
 
-    // Notify all admin clients so their lists update in real time
     req.app.get('io')?.to('admin_room').emit('complaint_deleted', { _id: doc._id.toString() });
 
     res.json({ message: 'Deleted.' });
@@ -225,8 +239,8 @@ router.get('/complaints', verifyUser, async (req, res) => {
 router.post('/complaints', verifyUser, async (req, res) => {
   try {
     const { category, location, description, priority } = req.body;
-    const categoryText = String(category || '').trim();
-    const locationText = String(location || '').trim();
+    const categoryText    = String(category    || '').trim();
+    const locationText    = String(location    || '').trim();
     const descriptionText = String(description || '').trim();
     if (!categoryText || !locationText || !descriptionText)
       return res.status(400).json({ message: 'category, location and description are required.' });
@@ -248,7 +262,6 @@ router.post('/complaints', verifyUser, async (req, res) => {
 
     const serialized = serialize(doc);
 
-    // Notify admin room of the new complaint in real time
     req.app.get('io')?.to('admin_room').emit('complaint_created', serialized);
 
     res.status(201).json(serialized);

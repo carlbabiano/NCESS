@@ -87,15 +87,31 @@ function formatFiledTime(complaint) {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function getComplaintQrValue(complaint) {
-  const id = complaint.id || complaint._id || '';
-  return `CMP:${id}`;
+function getComplaintUniqueId(complaint) {
+  if (!complaint) return '';
+  if (complaint.uniqueID) return String(complaint.uniqueID);
+  if (complaint.id)       return String(complaint.id);
+  return `CMP-${String(complaint._id || '').slice(-6).toUpperCase()}`;
 }
 
-function readComplaintQrValue(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  return raw.startsWith('CMP:') ? raw.slice(4) : raw;
+function getComplaintQrValue(complaint) {
+  return JSON.stringify({
+    complaintId: String(complaint?._id  || ''),
+    type:        'complaint',
+    uniqueID:    getComplaintUniqueId(complaint),
+  });
+}
+
+function readComplaintQrValue(raw) {
+  try {
+    const obj = JSON.parse(String(raw || '').trim());
+    if (obj?.type === 'complaint') return obj.uniqueID || obj.complaintId || '';
+    return '';
+  } catch {
+    // legacy fallback: old "CMP:xxx" format scanned before the update
+    const s = String(raw || '').trim();
+    return s.startsWith('CMP:') ? s.slice(4) : s;
+  }
 }
 
 function buildResidentGroups(list) {
@@ -194,8 +210,9 @@ export default function AdminComplaints() {
   const findComplaintByQr = useCallback((decodedValue) => {
     const id = readComplaintQrValue(decodedValue).toLowerCase();
     return complaints.find(c =>
-      String(c.id || '').toLowerCase() === id ||
-      String(c._id || '').toLowerCase() === id
+      String(c.uniqueID || '').toLowerCase() === id ||
+      String(c.id       || '').toLowerCase() === id ||
+      String(c._id      || '').toLowerCase() === id
     ) || null;
   }, [complaints]);
 
@@ -1231,7 +1248,7 @@ export default function AdminComplaints() {
               <div className="cmp-modal__header">
                 <div>
                   <h2 className="cmp-modal__title">Complaint QR Code</h2>
-                  <p className="cmp-modal__subtitle">{qrModalComplaint.id || qrModalComplaint._id}</p>
+                  <p className="cmp-modal__subtitle">{getComplaintUniqueId(qrModalComplaint)}</p>
                 </div>
                 <button className="cmp-modal__close" onClick={() => setQrModalComplaint(null)}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1245,7 +1262,7 @@ export default function AdminComplaints() {
                 </div>
                 <div style={{ width: '100%', textAlign: 'center' }}>
                   <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 8px' }}>COMPLAINT ID</p>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: '#111827', margin: 0 }}>{qrModalComplaint.id || qrModalComplaint._id}</p>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: '#111827', margin: 0 }}>{getComplaintUniqueId(qrModalComplaint)}</p>
                 </div>
               </div>
               <div className="cmp-modal__footer">

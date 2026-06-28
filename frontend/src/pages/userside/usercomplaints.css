@@ -254,3 +254,35 @@
     font-size: 14px;
   }
 }
+
+/* ── 3-dot Menu Cell ── */
+.ucmp-menu-cell{position:relative;width:48px;text-align:center;padding-right:18px!important;overflow:visible;}
+.ucmp-menu-btn{width:30px;height:30px;border-radius:7px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#9ca3af;transition:background 0.15s,color 0.15s;margin:0 auto;}
+.ucmp-menu-btn svg{width:16px;height:16px;}
+.ucmp-menu-btn:hover{background:#f3f4f6;color:#374151;}
+
+/* ── Dropdown ── */
+.ucmp-dropdown{position:fixed;background:#fff;border:1px solid #e9ecef;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.1);z-index:9999;min-width:180px;padding:6px;animation:ucDropIn 0.12s ease;}
+@keyframes ucDropIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.ucmp-dropdown__label{font-size:10.5px;font-weight:700;color:#9ca3af;letter-spacing:0.5px;text-transform:uppercase;padding:4px 8px 6px;margin:0;}
+.ucmp-dropdown__item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 8px;border:none;background:transparent;border-radius:7px;font-size:13px;font-weight:500;color:#374151;cursor:pointer;font-family:'DM Sans',sans-serif;text-align:left;transition:background 0.12s;}
+.ucmp-dropdown__item:hover{background:#f3f4f6;}
+.ucmp-dropdown__item--view{color:#2563eb;}
+.ucmp-dropdown__item--view:hover{background:#eff6ff;}
+.ucmp-dropdown__item--qr{color:#7c3aed;}
+.ucmp-dropdown__item--qr:hover{background:#f5f3ff;}
+.ucmp-dropdown__divider{height:1px;background:#f3f4f6;margin:4px 0;}
+
+/* ── QR Modal ── */
+.ucmp-modal--sm{max-width:420px;}
+.ucmp-modal--qr{max-width:400px;}
+.ucmp-qr-subtitle{font-size:12px;font-weight:700;color:#2563eb;margin:2px 0 0;}
+.ucmp-qr-body{align-items:center;gap:18px!important;}
+.ucmp-qr-code-wrap{padding:18px;background:#fff;border:1px solid #e9ecef;border-radius:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+.ucmp-qr-info{width:100%;display:flex;flex-direction:column;gap:0;border:1px solid #e9ecef;border-radius:10px;overflow:hidden;}
+.ucmp-qr-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #f3f4f6;}
+.ucmp-qr-row:last-child{border-bottom:none;}
+.ucmp-qr-row span{font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.3px;flex-shrink:0;}
+.ucmp-qr-row strong{font-size:13px;font-weight:600;color:#111827;text-align:right;}
+.ucmp-qr-hint{font-size:12px;color:#9ca3af;text-align:center;margin:0;line-height:1.5;}
+.ucmp-download-btn{display:flex;align-items:center;gap:6px;}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import { useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
+import QRCode from 'react-qr-code';
 import UserSidebar from '../../components/usersidebar';
 import UserTopbar  from '../../components/usertopbar';
 import './userappointments.css';
@@ -71,6 +72,22 @@ const DEFAULT_SCHEDULE = {
   sunday:    { enabled: false, start: '09:00', end: '12:00', slotDuration: 30, maxPerSlot: 1 },
 };
 
+function getAppointmentUniqueId(appt) {
+  if (!appt) return '';
+  if (appt.uniqueID) return String(appt.uniqueID);
+  if (appt.uniqueId) return String(appt.uniqueId);
+  if (appt.id) return String(appt.id);
+  return `APT-${String(appt._id || '').slice(-8).toUpperCase()}`;
+}
+
+function getAppointmentQrValue(appt) {
+  return JSON.stringify({
+    type: 'appointment',
+    uniqueID: getAppointmentUniqueId(appt),
+    appointmentId: String(appt?._id || ''),
+  });
+}
+
 export default function UserAppointments() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -128,6 +145,35 @@ export default function UserAppointments() {
     setToast(msg);
     setTimeout(() => setToast(''), 3500);
   }, []);
+
+  // QR modal
+  const [qrAppt, setQrAppt] = useState(null);
+  const qrRef = useRef(null);
+
+  const downloadQr = useCallback(() => {
+    if (!qrAppt || !qrRef.current) return;
+    const svg = qrRef.current.querySelector('svg');
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement('canvas');
+    const size = 320;
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+    const img = new Image();
+    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      const link = document.createElement('a');
+      link.download = `${getAppointmentUniqueId(qrAppt)}-qr.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+    img.src = url;
+  }, [qrAppt]);
 
   // Open modal pre-filled from quick link
   useEffect(() => {
@@ -780,7 +826,7 @@ export default function UserAppointments() {
                 <table className="uapt-table uapt-table--desktop">
                   <thead>
                     <tr>
-                      <th>Purpose</th><th>Date &amp; Time</th>
+                      <th>Appointment ID</th><th>Purpose</th><th>Date &amp; Time</th>
                       <th>Status</th><th></th>
                     </tr>
                   </thead>
@@ -790,6 +836,7 @@ export default function UserAppointments() {
                     )}
                     {paginated.map(appt => (
                       <tr key={appt._id} className="uapt-row">
+                        <td><span className="uapt-appt-id">{getAppointmentUniqueId(appt)}</span></td>
                         <td><span className="uapt-purpose">{appt.purpose}</span></td>
                         <td>
                           <p className="uapt-date">{appt.date}</p>
@@ -825,8 +872,21 @@ export default function UserAppointments() {
                           {openMenu === appt._id && (
                             <UaptDropdownPortal anchorEl={menuRefs.current[appt._id]}>
                               <p className="uapt-dropdown__label">Options</p>
+                              <button
+                                className="uapt-dropdown__item uapt-dropdown__item--qr"
+                                onClick={() => { setQrAppt(appt); setOpenMenu(null); }}
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                                  <rect x="3" y="3" width="7" height="7" rx="1"/>
+                                  <rect x="14" y="3" width="7" height="7" rx="1"/>
+                                  <rect x="3" y="14" width="7" height="7" rx="1"/>
+                                  <path d="M14 14h3v3"/><path d="M21 14v7h-7"/><path d="M17 17h4"/>
+                                </svg>
+                                Show QR Code
+                              </button>
                               {appt.status === 'Scheduled' && (
                                 <>
+                                  <div className="uapt-dropdown__divider" />
                                   <button
                                     className="uapt-dropdown__item uapt-dropdown__item--reschedule"
                                     onClick={() => { openReschedule(appt); setOpenMenu(null); }}
@@ -857,7 +917,7 @@ export default function UserAppointments() {
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                                     <path d="M7 11V7a5 5 0 0110 0v4"/>
                                   </svg>
-                                  No actions available
+                                  No other actions available
                                 </p>
                               )}
                             </UaptDropdownPortal>
@@ -877,6 +937,7 @@ export default function UserAppointments() {
                     <div key={appt._id} className="uapt-card">
                       <div className="uapt-card__top">
                         <div className="uapt-card__info">
+                          <span className="uapt-appt-id">{getAppointmentUniqueId(appt)}</span>
                           <span className="uapt-card__purpose">{appt.purpose}</span>
                         </div>
                         <div className="uapt-card__actions" onClick={e => e.stopPropagation()}>
@@ -897,8 +958,21 @@ export default function UserAppointments() {
                           {openMenu === `m-${appt._id}` && (
                             <UaptDropdownPortal anchorEl={menuRefs.current[`m-${appt._id}`]}>
                               <p className="uapt-dropdown__label">Options</p>
+                              <button
+                                className="uapt-dropdown__item uapt-dropdown__item--qr"
+                                onClick={() => { setQrAppt(appt); setOpenMenu(null); }}
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                                  <rect x="3" y="3" width="7" height="7" rx="1"/>
+                                  <rect x="14" y="3" width="7" height="7" rx="1"/>
+                                  <rect x="3" y="14" width="7" height="7" rx="1"/>
+                                  <path d="M14 14h3v3"/><path d="M21 14v7h-7"/><path d="M17 17h4"/>
+                                </svg>
+                                Show QR Code
+                              </button>
                               {appt.status === 'Scheduled' && (
                                 <>
+                                  <div className="uapt-dropdown__divider" />
                                   <button className="uapt-dropdown__item uapt-dropdown__item--reschedule"
                                     onClick={() => { openReschedule(appt); setOpenMenu(null); }}>
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
@@ -925,7 +999,7 @@ export default function UserAppointments() {
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                                     <path d="M7 11V7a5 5 0 0110 0v4"/>
                                   </svg>
-                                  No actions available
+                                  No other actions available
                                 </p>
                               )}
                             </UaptDropdownPortal>
@@ -1444,6 +1518,63 @@ export default function UserAppointments() {
                 <button className="uapt-ghost-btn" onClick={() => setRescheduleTarget(null)}>Go Back</button>
                 <button className="uapt-submit-btn" onClick={handleReschedule} disabled={rescheduling}>
                   {rescheduling ? 'Saving…' : 'Confirm Reschedule'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── QR Code Modal ── */}
+        {qrAppt && (
+          <div className="uapt-overlay" onClick={() => setQrAppt(null)}>
+            <div className="uapt-modal uapt-modal--sm uapt-modal--qr" onClick={e => e.stopPropagation()}>
+              <div className="uapt-modal__header">
+                <div>
+                  <h2>Appointment QR Code</h2>
+                  <p className="uapt-qr-subtitle">{getAppointmentUniqueId(qrAppt)}</p>
+                </div>
+                <button className="uapt-modal__close" onClick={() => setQrAppt(null)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              <div className="uapt-modal__body uapt-qr-body" ref={qrRef}>
+                <div className="uapt-qr-code-wrap">
+                  <QRCode
+                    value={getAppointmentQrValue(qrAppt)}
+                    size={220}
+                  />
+                </div>
+                <div className="uapt-qr-info">
+                  <div className="uapt-qr-row">
+                    <span>Purpose</span>
+                    <strong>{qrAppt.purpose}</strong>
+                  </div>
+                  <div className="uapt-qr-row">
+                    <span>Date &amp; Time</span>
+                    <strong>{qrAppt.date} at {qrAppt.time}</strong>
+                  </div>
+                  <div className="uapt-qr-row">
+                    <span>Status</span>
+                    <strong>
+                      <span className={`uapt-badge ${STATUS_CLS[qrAppt.status] || 'us--scheduled'}`} style={{ fontSize: 11, padding: '2px 8px' }}>
+                        {qrAppt.status}
+                      </span>
+                    </strong>
+                  </div>
+                </div>
+                <p className="uapt-qr-hint">Present this QR code at the barangay hall for your appointment.</p>
+              </div>
+              <div className="uapt-modal__footer">
+                <button className="uapt-ghost-btn" onClick={() => setQrAppt(null)}>Close</button>
+                <button className="uapt-submit-btn uapt-download-btn" onClick={downloadQr}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Download QR
                 </button>
               </div>
             </div>
