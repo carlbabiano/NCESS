@@ -303,8 +303,26 @@
 
 .appt-table__resident {
   white-space: nowrap;
-  overflow: hidden;
+  overflow: visible;
   max-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.appt-table__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 2px solid #c7d2fe;
 }
 
 .appt-table__resident-name {
@@ -314,6 +332,7 @@
   font-size: 13.5px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .appt-table__resident-email {
@@ -323,6 +342,7 @@
   font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .appt-table__purpose {
@@ -578,6 +598,10 @@
 .appt-page-num:hover { background: #f3f4f6; }
 .appt-page-num--active { background: #2563eb; border-color: #2563eb; color: #fff; font-weight: 600; }
 .appt-page-ellipsis { font-size: 13px; color: #9ca3af; padding: 0 4px; }
+
+/* ─── Footer ─────────────────────────────────────── */
+.appt-footer { padding: 14px 32px; font-size: 13px; color: #9ca3af; }
+.appt-footer strong { color: #374151; }
 
 /* ─── Toast ──────────────────────────────────────── */
 .appt-toast {

@@ -1233,17 +1233,27 @@ export default function AdminAppointments() {
                               <td className="appt-table__resident">
                                 {extras.length > 0 ? (
                                   <>
-                                    <p className="appt-table__resident-name">{primary.resident}</p>
-                                    {primary.residentEmail && (
-                                      <p className="appt-table__resident-email">{primary.residentEmail}</p>
-                                    )}
+                                    <div className="appt-table__avatar">
+                                      {(primary.resident || '?').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <p className="appt-table__resident-name">{primary.resident}</p>
+                                      {primary.residentEmail && (
+                                        <p className="appt-table__resident-email">{primary.residentEmail}</p>
+                                      )}
+                                    </div>
                                   </>
                                 ) : (
                                   <>
-                                    <p className="appt-table__resident-name">{primary.resident}</p>
-                                    {primary.residentEmail && (
-                                      <p className="appt-table__resident-email">{primary.residentEmail}</p>
-                                    )}
+                                    <div className="appt-table__avatar">
+                                      {(primary.resident || '?').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <p className="appt-table__resident-name">{primary.resident}</p>
+                                      {primary.residentEmail && (
+                                        <p className="appt-table__resident-email">{primary.residentEmail}</p>
+                                      )}
+                                    </div>
                                   </>
                                 )}
                               </td>
@@ -1437,6 +1447,9 @@ export default function AdminAppointments() {
               )}
             </>
           )}
+          <div className="appt-footer">
+            Showing <strong>{filtered.length}</strong> of <strong>{appointments.length}</strong> appointments
+          </div>
 
           {/* ���═══════════════════════════════════════
               TAB: AVAILABILITY
