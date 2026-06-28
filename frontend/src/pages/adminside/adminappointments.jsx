@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { Html5Qrcode } from 'html5-qrcode';
+import QRCode from 'react-qr-code';
 
 import Sidebar from '../../components/adminsidebar';
 import AdminTopbar from '../../components/admintopbar';
@@ -90,6 +92,33 @@ function fmt12(time24) {
   return `${hour}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
+function getAppointmentUniqueId(appt) {
+  if (!appt) return '';
+  if (appt.uniqueID) return String(appt.uniqueID);
+  if (appt.uniqueId) return String(appt.uniqueId);
+  if (appt.id) return String(appt.id);
+  return `APT-${String(appt._id || '').slice(-8).toUpperCase()}`;
+}
+
+function getAppointmentQrValue(appt) {
+  return JSON.stringify({
+    type: 'appointment',
+    uniqueID: getAppointmentUniqueId(appt),
+    appointmentId: String(appt?._id || ''),
+  });
+}
+
+function readAppointmentQrValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed.uniqueID || parsed.uniqueId || parsed.id || parsed.appointmentId || parsed._id || raw;
+  } catch {
+    return raw;
+  }
+}
+
 function generateSlots(start, end, duration) {
   const slots = [];
   let [sh, sm] = start.split(':').map(Number);
@@ -127,6 +156,13 @@ export default function AdminAppointments() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting,     setDeleting]     = useState(false);
   const [toast,        setToast]        = useState('');
+  const [qrModalAppt,  setQrModalAppt]  = useState(null);
+  const [scanModalOpen, setScanModalOpen] = useState(false);
+  const [qrScanStatus, setQrScanStatus] = useState('idle');
+  const [qrScanError,  setQrScanError]  = useState('');
+  const [qrScanResult, setQrScanResult] = useState(null);
+  const qrScannerRef = useRef(null);
+  const qrScanLockRef = useRef(false);
 
   const [expandedResidents, setExpandedResidents] = useState(new Set());
 
@@ -173,6 +209,173 @@ export default function AdminAppointments() {
   });
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 3500); };
+
+  const findAppointmentByQr = useCallback((decodedValue) => {
+    const normalized = readAppointmentQrValue(decodedValue).toLowerCase();
+    return appointments.find(appt => {
+      const uniqueId = getAppointmentUniqueId(appt).toLowerCase();
+      const mongoId = String(appt._id || '').toLowerCase();
+      return normalized === uniqueId || normalized === mongoId;
+    }) || null;
+  }, [appointments]);
+
+  const stopQrScanner = useCallback(async () => {
+    if (!qrScannerRef.current) return;
+    try {
+      const state = qrScannerRef.current.getState?.();
+      if (state === 2 || state === 3) await qrScannerRef.current.stop();
+    } catch { /* scanner may already be stopped */ }
+    try { qrScannerRef.current.clear(); } catch { /* ignore cleanup noise */ }
+    qrScannerRef.current = null;
+  }, []);
+
+  const closeQrModal = useCallback(() => {
+    setQrModalAppt(null);
+  }, []);
+
+  const closeScanModal = useCallback(async () => {
+    await stopQrScanner();
+    qrScanLockRef.current = false;
+    setScanModalOpen(false);
+    setQrScanStatus('idle');
+    setQrScanError('');
+    setQrScanResult(null);
+  }, [stopQrScanner]);
+
+  const openQrModal = (appt) => {
+    setOpenMenu(null);
+    setQrModalAppt(appt);
+  };
+
+  const openScanModal = () => {
+    setOpenMenu(null);
+    qrScanLockRef.current = false;
+    setScanModalOpen(true);
+    setQrScanResult(null);
+    setQrScanError('');
+    setQrScanStatus('requesting');
+  };
+
+  const handleQrDecoded = useCallback(async (decodedText) => {
+    if (qrScanLockRef.current) return;
+    qrScanLockRef.current = true;
+    const matched = findAppointmentByQr(decodedText);
+    if (!matched) {
+      setQrScanResult(null);
+      setQrScanError('No appointment matched this QR code.');
+      setTimeout(() => {
+        qrScanLockRef.current = false;
+        setQrScanError('');
+      }, 1800);
+      return;
+    }
+    setQrScanResult(matched);
+    setQrScanError('');
+    setQrScanStatus('success');
+    await stopQrScanner();
+  }, [findAppointmentByQr, stopQrScanner]);
+
+  useEffect(() => {
+    if (!scanModalOpen || qrScanStatus !== 'requesting') return undefined;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const constraints = {
+          video: {
+            facingMode: 'environment',
+            width: { min: 320, ideal: 640, max: 1280 },
+            height: { min: 240, ideal: 480, max: 960 },
+          },
+        };
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        }
+        stream.getTracks().forEach(track => track.stop());
+        if (!cancelled) setQrScanStatus('scanning');
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err?.message || '';
+        if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || msg.includes('Permission')) {
+          setQrScanStatus('denied');
+          setQrScanError('Camera permission was denied. Allow camera access and try again.');
+        } else {
+          setQrScanStatus('error');
+          setQrScanError('Could not access camera. Please check your device settings.');
+        }
+      }
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [scanModalOpen, qrScanStatus]);
+
+  useEffect(() => {
+    if (!scanModalOpen || qrScanStatus !== 'scanning') return undefined;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const el = document.getElementById('appt-qr-scanner');
+      if (!el || cancelled) return;
+      try {
+        const scanner = new Html5Qrcode('appt-qr-scanner', { verbose: false });
+        qrScannerRef.current = scanner;
+        try {
+          await scanner.start(
+            {
+              facingMode: 'environment',
+              width: { min: 320, ideal: 640, max: 1280 },
+              height: { min: 240, ideal: 480, max: 960 },
+            },
+            {
+              fps: 15,
+              qrbox: { width: 280, height: 280 },
+              aspectRatio: 1.0,
+              disableFlip: false,
+              experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+            },
+            handleQrDecoded,
+            () => {}
+          );
+        } catch {
+          try { await scanner.stop(); } catch { /* ignore */ }
+          try { await scanner.clear(); } catch { /* ignore */ }
+          await new Promise(resolve => setTimeout(resolve, 300));
+          const retryScanner = new Html5Qrcode('appt-qr-scanner', { verbose: false });
+          qrScannerRef.current = retryScanner;
+          await retryScanner.start(
+            { facingMode: 'environment' },
+            { fps: 15, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, disableFlip: false },
+            handleQrDecoded,
+            () => {}
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err?.message || '';
+          if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || msg.includes('Permission')) {
+            setQrScanStatus('denied');
+            setQrScanError('Camera permission was denied. Allow camera access and try again.');
+          } else {
+            setQrScanStatus('error');
+            setQrScanError('Could not start camera. Please try again.');
+          }
+        }
+      }
+    }, 150);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [scanModalOpen, qrScanStatus, handleQrDecoded]);
+
+  useEffect(() => () => { stopQrScanner(); }, [stopQrScanner]);
 
   // ── Create modal calendar state ──
   const [formCalMonth, setFormCalMonth] = useState(() => {
@@ -768,6 +971,25 @@ export default function AdminAppointments() {
     )
   );
 
+  const renderAppointmentQrButton = (appt) => (
+    <button
+      type="button"
+      className="appt-qr-button"
+      onClick={e => { e.stopPropagation(); openQrModal(appt); }}
+      aria-label={`Show QR for appointment ${getAppointmentUniqueId(appt)}`}
+      title="Show appointment QR"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <path d="M14 14h3v3" />
+        <path d="M21 14v7h-7" />
+        <path d="M17 17h4" />
+      </svg>
+    </button>
+  );
+
   /* ── Modal helpers ── */
   const openModal  = () => {
     setForm(EMPTY_FORM); setFormError('');
@@ -902,13 +1124,25 @@ export default function AdminAppointments() {
               <p>Manage resident appointments and configure your availability schedule.</p>
             </div>
             {activeTab === 'appointments' && (
-              <button className="appt-header__btn" onClick={openModal}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                Create Appointment
-              </button>
+              <div className="appt-header__actions">
+                <button className="appt-header__btn appt-header__btn--scan" onClick={openScanModal}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                    <path d="M4 7V5a1 1 0 0 1 1-1h2" />
+                    <path d="M17 4h2a1 1 0 0 1 1 1v2" />
+                    <path d="M20 17v2a1 1 0 0 1-1 1h-2" />
+                    <path d="M7 20H5a1 1 0 0 1-1-1v-2" />
+                    <path d="M7 12h10" />
+                  </svg>
+                  Scan QR
+                </button>
+                <button className="appt-header__btn" onClick={openModal}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Create Appointment
+                </button>
+              </div>
             )}
           </div>
 
@@ -974,47 +1208,37 @@ export default function AdminAppointments() {
                   <table className="appt-table appt-table--desktop">
                     <thead>
                       <tr>
-                        <th>Resident</th><th>Date &amp; Time</th>
+                        <th>UniqueID</th><th>Resident</th><th>Date &amp; Time Appointed</th>
                         <th>Purpose</th><th>Status</th><th></th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedGroups.length === 0 && (
-                        <tr><td colSpan="5" className="appt-table__empty">No appointments found.</td></tr>
+                        <tr><td colSpan="6" className="appt-table__empty">No appointments found.</td></tr>
                       )}
                       {paginatedGroups.map(([residentKey, appts]) => {
                         const primary = appts[0];
                         const extras  = appts.slice(1);
                         const isExpanded = expandedResidents.has(residentKey);
-                        const counts = {
-                          scheduled: appts.filter(a => a.status === 'Scheduled').length,
-                          closed: appts.filter(a => a.status === 'Closed').length,
-                          cancelled: appts.filter(a => a.status === 'Cancelled').length,
-                        };
                         return (
                           <React.Fragment key={residentKey}>
                             <tr className={`appt-table__row${extras.length > 0 ? ' appt-table__row--group' : ''}`}>
+                              <td className="appt-table__unique">
+                                {extras.length > 0 ? null : (
+                                  <>
+                                    <span className="appt-unique-id">{getAppointmentUniqueId(primary)}</span>
+                                    {renderAppointmentQrButton(primary)}
+                                  </>
+                                )}
+                              </td>
                               <td className="appt-table__resident">
                                 {extras.length > 0 ? (
-                                  <button
-                                    type="button"
-                                    className="appt-group-toggle"
-                                    onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
-                                    aria-expanded={isExpanded}
-                                  >
-                                    <span className={`appt-group-toggle__chevron${isExpanded ? ' appt-group-toggle__chevron--open' : ''}`}>
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                        <polyline points="9 18 15 12 9 6" />
-                                      </svg>
-                                    </span>
-                                    <span className="appt-group-toggle__text">
-                                      <span className="appt-table__resident-name">{primary.resident}</span>
-                                      {primary.residentEmail && (
-                                        <span className="appt-table__resident-email">{primary.residentEmail}</span>
-                                      )}
-                                      <span className="appt-group-count">{appts.length} appointments booked</span>
-                                    </span>
-                                  </button>
+                                  <>
+                                    <p className="appt-table__resident-name">{primary.resident}</p>
+                                    {primary.residentEmail && (
+                                      <p className="appt-table__resident-email">{primary.residentEmail}</p>
+                                    )}
+                                  </>
                                 ) : (
                                   <>
                                     <p className="appt-table__resident-name">{primary.resident}</p>
@@ -1025,18 +1249,24 @@ export default function AdminAppointments() {
                                 )}
                               </td>
                               <td>
-                                <div className="appt-table__datetime">
-                                  <span className="appt-table__date">{fmtDate(primary.date)}</span>
-                                  <span className="appt-table__time">{fmt12(primary.time)}</span>
-                                </div>
+                                {extras.length > 0 ? null : (
+                                  <div className="appt-table__datetime">
+                                    <span className="appt-table__date">{fmtDate(primary.date)}</span>
+                                    <span className="appt-table__time">{fmt12(primary.time)}</span>
+                                  </div>
+                                )}
                               </td>
                               <td className="appt-table__purpose">
-                                {extras.length > 0 ? `Latest: ${primary.purpose}` : primary.purpose}
+                                {extras.length > 0 ? (
+                                  <>
+                                    <strong className="appt-table__purpose-label">Latest:</strong> {primary.purpose}
+                                  </>
+                                ) : primary.purpose}
                               </td>
                               <td className="appt-table__menu-cell" onClick={e => e.stopPropagation()}>
                                 {extras.length > 0 ? (
-                                  <span className="appt-group-status">
-                                    {counts.scheduled} scheduled · {counts.closed} closed · {counts.cancelled} cancelled
+                                  <span className="appt-group-count">
+                                    {appts.length} appointments booked
                                   </span>
                                 ) : (
                                   <span className={`appt-status-badge ${STATUS_META[primary.status]?.className || 'status--scheduled'}`}>
@@ -1049,8 +1279,14 @@ export default function AdminAppointments() {
                                   <button
                                     className="appt-group-action"
                                     onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
+                                    aria-label={isExpanded ? 'Hide appointments' : 'Show appointments'}
+                                    aria-expanded={isExpanded}
                                   >
-                                    {isExpanded ? 'Hide' : 'Show'} appointments
+                                    <span className={`appt-group-toggle__chevron${isExpanded ? ' appt-group-toggle__chevron--open' : ''}`}>
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <polyline points="9 18 15 12 9 6" />
+                                      </svg>
+                                    </span>
                                   </button>
                                 ) : (
                                   renderAppointmentActions(primary)
@@ -1059,21 +1295,27 @@ export default function AdminAppointments() {
                             </tr>
                             {isExpanded && extras.length > 0 && (
                               <tr className="appt-dropdown-row">
-                                <td colSpan="5">
+                                <td colSpan="6">
                                   <div className="appt-appointment-list">
                                     {appts.map(appt => (
                                       <div key={appt._id} className="appt-appointment-item">
+                                        <div className="appt-appointment-item__unique">
+                                          <span className="appt-unique-id">{getAppointmentUniqueId(appt)}</span>
+                                          {renderAppointmentQrButton(appt)}
+                                        </div>
+                                        <div className="appt-appointment-item__resident-spacer" />
+                                        <div className="appt-appointment-item__datetime">
+                                          <span className="appt-table__date">{fmtDate(appt.date)}</span>
+                                          <span className="appt-table__time">{fmt12(appt.time)}</span>
+                                        </div>
                                         <div className="appt-appointment-item__main">
                                           <p className="appt-appointment-item__purpose">{appt.purpose}</p>
-                                          <p className="appt-appointment-item__meta">
-                                            {fmtDate(appt.date)} · {fmt12(appt.time)}
-                                          </p>
                                         </div>
                                         <span className={`appt-status-badge ${STATUS_META[appt.status]?.className || 'status--scheduled'}`}>
                                           {STATUS_META[appt.status]?.label || appt.status}
                                         </span>
-                                        <span className="appt-appointment-item__assigned">{appt.assignedTo || 'Unassigned'}</span>
                                         <div className="appt-appointment-item__actions" onClick={e => e.stopPropagation()}>
+                                          <span className="appt-appointment-item__assigned">{appt.assignedTo || 'Unassigned'}</span>
                                           {renderAppointmentActions(appt)}
                                         </div>
                                       </div>
@@ -1101,6 +1343,10 @@ export default function AdminAppointments() {
                         <div key={appt._id} className={`appt-card${isExtra ? ' appt-card--extra' : ''}`}>
                           <div className="appt-card__top">
                             <div className="appt-card__resident">
+                              <span className="appt-card__unique">
+                                <span className="appt-unique-id">{getAppointmentUniqueId(appt)}</span>
+                                {renderAppointmentQrButton(appt)}
+                              </span>
                               <span className="appt-card__name">{appt.resident}</span>
                               {appt.residentEmail && (
                                 <span className="appt-card__email">{appt.residentEmail}</span>
@@ -1160,20 +1406,19 @@ export default function AdminAppointments() {
                                 onClick={e => { e.stopPropagation(); toggleResidentExpand(residentKey); }}
                                 aria-expanded={isExpanded}
                               >
-                                <span className={`appt-group-toggle__chevron${isExpanded ? ' appt-group-toggle__chevron--open' : ''}`}>
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <polyline points="9 18 15 12 9 6" />
-                                  </svg>
-                                </span>
                                 <span className="appt-card-summary__main">
                                   <span className="appt-card__name">{primary.resident}</span>
                                   {primary.residentEmail && (
                                     <span className="appt-card__email">{primary.residentEmail}</span>
                                   )}
-                                  <span className="appt-group-count">{appts.length} appointments booked</span>
                                 </span>
                                 <span className="appt-card-summary__action">
-                                  {isExpanded ? 'Hide' : 'Show'}
+                                  <span className="appt-group-count">{appts.length} appointments booked</span>
+                                  <span className={`appt-group-toggle__chevron${isExpanded ? ' appt-group-toggle__chevron--open' : ''}`}>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="9 18 15 12 9 6" />
+                                    </svg>
+                                  </span>
                                 </span>
                               </button>
                               {isExpanded && (
@@ -1834,6 +2079,158 @@ export default function AdminAppointments() {
             </div>
           </div>
         )}
+
+        {/* Appointment QR Modal */}
+        {qrModalAppt && (
+          <div className="appt-modal-overlay appt-qr-overlay" onClick={closeQrModal}>
+            <div className="appt-qr-modal appt-qr-modal--display" onClick={e => e.stopPropagation()}>
+              <div className="appt-modal__header">
+                <div>
+                  <h2 className="appt-modal__title">Appointment QR Code</h2>
+                  <p className="appt-modal__subtitle">QR code for this appointment.</p>
+                </div>
+                <button className="appt-modal__close" onClick={closeQrModal}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              <div className="appt-qr-display-body">
+                <div className="appt-qr-display-code">
+                  <QRCode value={getAppointmentQrValue(qrModalAppt)} size={220} />
+                </div>
+                <div className="appt-qr-detail-grid">
+                  <span>UniqueID</span>
+                  <strong>{getAppointmentUniqueId(qrModalAppt)}</strong>
+                  <span>Resident</span>
+                  <strong>{qrModalAppt.resident || 'Unknown resident'}</strong>
+                  <span>Purpose</span>
+                  <strong>{qrModalAppt.purpose || 'No purpose provided'}</strong>
+                  <span>Date &amp; Time Appointed</span>
+                  <strong>{fmtDate(qrModalAppt.rawDate || qrModalAppt.date)} at {fmt12(qrModalAppt.rawTime || qrModalAppt.time)}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Appointment Scanner Modal */}
+        {scanModalOpen && (() => {
+          const detailAppt = qrScanResult;
+          return (
+            <div className="appt-modal-overlay appt-qr-overlay" onClick={closeScanModal}>
+              <div className="appt-qr-modal" onClick={e => e.stopPropagation()}>
+                <div className="appt-modal__header">
+                  <div>
+                    <h2 className="appt-modal__title">Scan Appointment QR</h2>
+                    <p className="appt-modal__subtitle">Scan a QR code to show the appointment details.</p>
+                  </div>
+                  <button className="appt-modal__close" onClick={closeScanModal}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+                <div className={`appt-qr-modal__body${detailAppt ? ' appt-qr-modal__body--with-result' : ' appt-qr-modal__body--scanner-only'}`}>
+                  <div className="appt-qr-scan-panel">
+                    {qrScanStatus === 'requesting' && (
+                      <div className="appt-qr-permission">
+                        <div className="appt-qr-permission__icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M23 7l-7 5 7 5V7z" />
+                            <rect x="1" y="5" width="15" height="14" rx="2" />
+                          </svg>
+                        </div>
+                        <h3>Requesting camera access</h3>
+                        <p>Allow camera permission to scan appointment QR codes.</p>
+                      </div>
+                    )}
+                    {qrScanStatus === 'scanning' && (
+                      <div className="appt-qr-scanner-wrap">
+                        <div className="appt-qr-scanner-label">
+                          <span className="appt-qr-live-dot" />
+                          Camera is scanning
+                        </div>
+                        <div className="appt-qr-scanner-viewport">
+                          <div id="appt-qr-scanner" className="appt-qr-scanner-region" />
+                          <span className="appt-qr-corner appt-qr-corner--tl" />
+                          <span className="appt-qr-corner appt-qr-corner--tr" />
+                          <span className="appt-qr-corner appt-qr-corner--bl" />
+                          <span className="appt-qr-corner appt-qr-corner--br" />
+                          <span className="appt-qr-scan-line" />
+                        </div>
+                      </div>
+                    )}
+                    {qrScanStatus === 'success' && (
+                      <div className="appt-qr-scanner appt-qr-scanner--success">
+                        <div className="appt-qr-success">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="8 12.5 11 15.5 16.5 9" />
+                          </svg>
+                          <span>QR matched</span>
+                        </div>
+                      </div>
+                    )}
+                    {(qrScanStatus === 'error' || qrScanStatus === 'denied') && (
+                      <div className="appt-qr-permission appt-qr-permission--error">
+                        <div className="appt-qr-permission__icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                        </div>
+                        <h3>{qrScanStatus === 'denied' ? 'Camera blocked' : 'Scanner unavailable'}</h3>
+                      </div>
+                    )}
+                    {qrScanError && <p className="appt-qr-error">{qrScanError}</p>}
+                    {qrScanStatus === 'success' && (
+                      <button className="appt-qr-rescan" onClick={() => {
+                        qrScanLockRef.current = false;
+                        setQrScanResult(null);
+                        setQrScanStatus('requesting');
+                      }}>
+                        Scan Again
+                      </button>
+                    )}
+                    {(qrScanStatus === 'error' || qrScanStatus === 'denied') && (
+                      <button className="appt-qr-rescan" onClick={() => {
+                        qrScanLockRef.current = false;
+                        setQrScanResult(null);
+                        setQrScanError('');
+                        setQrScanStatus('requesting');
+                      }}>
+                        Try Again
+                      </button>
+                    )}
+                  </div>
+                  {detailAppt && (
+                    <div className="appt-qr-details">
+                        <div className="appt-qr-preview">
+                          <QRCode value={getAppointmentQrValue(detailAppt)} size={96} />
+                        </div>
+                        <div className="appt-qr-detail-grid">
+                          <span>Appointment ID</span>
+                          <strong>{getAppointmentUniqueId(detailAppt)}</strong>
+                          <span>Resident</span>
+                          <strong>{detailAppt.resident || 'Unknown resident'}</strong>
+                          <span>Purpose</span>
+                          <strong>{detailAppt.purpose || 'No purpose provided'}</strong>
+                          <span>Date &amp; Time Appointed</span>
+                          <strong>{fmtDate(detailAppt.rawDate || detailAppt.date)} at {fmt12(detailAppt.rawTime || detailAppt.time)}</strong>
+                          <span>Status</span>
+                          <strong>{STATUS_META[detailAppt.status]?.label || detailAppt.status || 'Scheduled'}</strong>
+                          <span>Assigned To</span>
+                          <strong>{detailAppt.assignedTo || 'Unassigned'}</strong>
+                        </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Create Appointment Modal ── */}
         {showModal && (
