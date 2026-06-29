@@ -12,7 +12,51 @@ const CHAT_NOTICE_UID = 'chat-barangay-support';
 const SEX_OPTIONS = ['Male', 'Female'];
 const PUROK_OPTIONS = ['Purok 1', 'Purok 2', 'Purok 3', 'Purok 4', 'Purok 5', 'Purok 6', 'Purok 7', 'Iram'];
 const CIVIL_STATUS_OPTIONS = ['Single', 'Married', 'Widowed', 'Separated'];
-const RESIDENCY_STATUS_OPTIONS = ['Permanent Resident', 'Temporary Resident', 'Renter', 'Boarder'];
+const RESIDENCY_TYPES = [
+  { value: 'permanent', label: 'Permanent Resident' },
+  { value: 'temporary', label: 'Temporary Resident / Tenant' },
+];
+const SUFFIXES = ['Jr', 'Sr', 'I', 'II', 'III', 'IV', 'V'];
+
+const PSGC_API_URL = 'https://psgc.gitlab.io/api';
+const DEFAULT_BARANGAY = 'New Cabalan';
+const DEFAULT_CITY     = 'Olongapo City';
+const DEFAULT_PROVINCE = 'Zambales';
+const DEFAULT_REGION   = 'Region III';
+const REGION_DISPLAY_NAMES = {
+  '010000000': 'REGION I (ILOCOS REGION)',
+  '020000000': 'REGION II (CAGAYAN VALLEY)',
+  '030000000': 'REGION III (CENTRAL LUZON)',
+  '040000000': 'REGION IV-A (CALABARZON)',
+  '170000000': 'REGION IV-B (MIMAROPA)',
+  '050000000': 'REGION V (BICOL REGION)',
+  '060000000': 'REGION VI (WESTERN VISAYAS)',
+  '070000000': 'REGION VII (CENTRAL VISAYAS)',
+  '080000000': 'REGION VIII (EASTERN VISAYAS)',
+  '090000000': 'REGION IX (ZAMBOANGA PENINSULA)',
+  '100000000': 'REGION X (NORTHERN MINDANAO)',
+  '110000000': 'REGION XI (DAVAO REGION)',
+  '120000000': 'REGION XII (SOCCSKSARGEN)',
+  '130000000': 'NATIONAL CAPITAL REGION (NCR)',
+  '140000000': 'CORDILLERA ADMINISTRATIVE REGION (CAR)',
+  '150000000': 'BANGSAMORO AUTONOMOUS REGION IN MUSLIM MINDANAO (BARMM)',
+  '160000000': 'REGION XIII (CARAGA)',
+};
+const REGION_ORDER = [
+  '010000000','020000000','030000000','040000000','170000000',
+  '050000000','060000000','070000000','080000000','090000000',
+  '100000000','110000000','120000000','130000000','140000000',
+  '150000000','160000000',
+];
+const getPsgcName = item => item?.name || item?.regionName || item?.provinceName || item?.cityName || item?.municipalityName || '';
+const sortPsgcList = list => [...list].sort((a, b) => getPsgcName(a).localeCompare(getPsgcName(b)));
+const getRegionDisplayName = region => REGION_DISPLAY_NAMES[region?.code] || `${region?.regionName || ''} (${region?.name || ''})`.trim();
+const sortRegions = list => [...list].sort((a, b) => {
+  const iA = REGION_ORDER.indexOf(a.code), iB = REGION_ORDER.indexOf(b.code);
+  if (iA !== -1 && iB !== -1) return iA - iB;
+  if (iA !== -1) return -1; if (iB !== -1) return 1;
+  return getRegionDisplayName(a).localeCompare(getRegionDisplayName(b));
+});
 const VOTER_STATUS_OPTIONS = ['Registered Voter', 'Not Registered', 'Transferred', 'Inactive'];
 const EDUCATIONAL_ATTAINMENT_OPTIONS = [
   'No Formal Education',
@@ -31,6 +75,7 @@ const PROFILE_CHANGE_LABELS = {
   firstName: 'First Name',
   middleName: 'Middle Name',
   lastName: 'Last Name',
+  suffix: 'Suffix',
   birthdate: 'Date of Birth',
   sex: 'Sex',
   civilStatus: 'Civil Status',
@@ -39,7 +84,7 @@ const PROFILE_CHANGE_LABELS = {
   email: 'Email Address',
   homeAddress: 'Home Address',
   purok: 'Purok',
-  residencyStatus: 'Residency Status',
+  residencyStatus: 'Residency Type',
   lengthOfStay: 'Length of Stay',
   voterStatus: 'Voter Status',
   householdId: 'Household / Family ID',
@@ -47,6 +92,11 @@ const PROFILE_CHANGE_LABELS = {
   emergencyContactNumber: 'Emergency Contact Number',
   occupation: 'Occupation',
   educationalAttainment: 'Educational Attainment',
+  permanentStreet: 'Permanent Street Address',
+  permanentBarangay: 'Permanent Barangay',
+  permanentCity: 'Permanent City / Municipality',
+  permanentProvince: 'Permanent Province',
+  permanentRegion: 'Permanent Region',
 };
 
 const PROFILE_PROOF_REQUIRED_FIELDS = [
@@ -291,14 +341,71 @@ function NotificationIcon({ kind, type }) {
 // userlogin.jsx saves the full user object returned by /userlogin as JSON
 // under the key "user" in localStorage (remember-me) or sessionStorage.
 function normalizeUserProfile(u = {}) {
-  const addressParts = (u.homeAddress || '').split(',').map(s => s.trim());
-  const houseNo = addressParts[0] || '';
-  const street  = addressParts.slice(1).join(', ') || u.homeAddress || '';
+  // Signup stores homeAddress as a full joined string.
+  // For temporary: "123 St, New Cabalan, Olongapo City, Region III"
+  // For permanent: "123 St, New Cabalan, Olongapo City, Zambales, Region III"
+  // Parse it directly so we never rely on addressBarangay/City/Region being
+  // present in the login response (they may not be returned by all backends).
+  const rawHome = u.homeAddress || '';
+  const parts   = rawHome.split(',').map(s => s.trim()).filter(Boolean);
+  const rawPermanent = u.permanentAddress || '';
+  const permanentParts = rawPermanent.split(',').map(s => s.trim()).filter(Boolean);
+  const residencyStatus = u.residencyStatus ||
+    (u.residentType === 'temporary' ? 'Temporary Resident / Tenant' : u.residentType === 'permanent' ? 'Permanent Resident' : '');
+
+  // First segment is always the user-entered street/house number
+  const houseNo = u.houseNo || u.street || parts[0] || '';
+
+  // Detect from structure: temporary=4 parts (no province), permanent=5 parts
+  const structurallyTemporary = parts.length === 4;
+  const structurallyPermanent = parts.length >= 5;
+  const isTemporary = u.residentType === 'temporary' || structurallyTemporary ||
+    (!structurallyPermanent && ['Temporary Resident / Tenant', 'Temporary Resident', 'Renter', 'Boarder']
+      .includes(residencyStatus || ''));
+
+  let addressBarangay, addressCity, addressProvince, addressRegion;
+  if (structurallyPermanent) {
+    addressRegion   = parts[parts.length - 1];
+    addressProvince = parts[parts.length - 2];
+    addressCity     = parts[parts.length - 3];
+    addressBarangay = parts[parts.length - 4];
+  } else if (structurallyTemporary) {
+    addressRegion   = parts[parts.length - 1];
+    addressCity     = parts[parts.length - 2];
+    addressBarangay = parts[parts.length - 3];
+    addressProvince = '';
+  } else {
+    addressBarangay = u.addressBarangay || DEFAULT_BARANGAY;
+    addressCity     = u.addressCity     || DEFAULT_CITY;
+    addressProvince = u.addressProvince || (isTemporary ? '' : DEFAULT_PROVINCE);
+    addressRegion   = u.addressRegion   || DEFAULT_REGION;
+  }
+  addressBarangay = u.addressBarangay || addressBarangay || DEFAULT_BARANGAY;
+  addressCity     = u.addressCity     || addressCity     || DEFAULT_CITY;
+  addressProvince = u.addressProvince !== undefined ? u.addressProvince : (addressProvince || (isTemporary ? '' : DEFAULT_PROVINCE));
+  addressRegion   = u.addressRegion   || addressRegion   || DEFAULT_REGION;
+
+  const permanentSourceParts = permanentParts.length > 0
+    ? permanentParts
+    : (!isTemporary && parts.length > 0 ? parts : []);
+  const permanentStreet = u.permanentStreet || permanentSourceParts[0] || (isTemporary ? rawPermanent : houseNo);
+  const permanentBarangay = u.permanentBarangay || permanentSourceParts[1] || (isTemporary ? '' : DEFAULT_BARANGAY);
+  const permanentCity = u.permanentCity || permanentSourceParts[2] || (isTemporary ? '' : DEFAULT_CITY);
+  const permanentProvince = u.permanentProvince || permanentSourceParts[3] || (isTemporary ? '' : DEFAULT_PROVINCE);
+  const permanentRegion = u.permanentRegion || permanentSourceParts[4] || (isTemporary ? '' : DEFAULT_REGION);
+  const permanentAddress = rawPermanent || [
+    permanentStreet,
+    permanentBarangay,
+    permanentCity,
+    permanentProvince,
+    permanentRegion,
+  ].filter(Boolean).join(', ');
 
   return {
     firstName:   u.firstName   || '',
     middleName:  u.middleName  || '',
     lastName:    u.lastName    || '',
+    suffix:      u.suffix      || '',
     // topbar uses "dateOfBirth"; signup stores "birthdate"
     dateOfBirth: u.birthdate   || u.dateOfBirth || '',
     sex:         u.sex         || '',
@@ -307,10 +414,16 @@ function normalizeUserProfile(u = {}) {
     // topbar uses "mobile"; signup stores "contactNumber"
     mobile:      u.contactNumber || u.mobile || '',
     email:       u.email         || '',
+    homeAddress:     rawHome,
     houseNo,
-    street,
-    purok:           u.purok           || '',
-    residencyStatus: u.residencyStatus || '',
+    street:          u.street || houseNo,
+    purok:           u.purok  || '',
+    addressBarangay,
+    addressCity,
+    addressProvince,
+    addressRegion,
+    residentType:    u.residentType || (isTemporary ? 'temporary' : 'permanent'),
+    residencyStatus,
     lengthOfStay:    u.lengthOfStay    || '',
     voterStatus:     u.voterStatus     || '',
     householdId:     u.householdId     || '',
@@ -320,6 +433,12 @@ function normalizeUserProfile(u = {}) {
     emergencyContactNumber: u.emergencyContactNumber || '',
     occupation:             u.occupation             || '',
     educationalAttainment:  u.educationalAttainment  || '',
+    permanentAddress,
+    permanentStreet,
+    permanentBarangay,
+    permanentCity,
+    permanentProvince,
+    permanentRegion,
   };
 }
 
@@ -346,14 +465,17 @@ function saveStoredUser(user) {
 
 // Fallback used only in dev / Storybook when no auth session exists
 const EMPTY_USER = {
-  firstName: '', middleName: '', lastName: '',
+  firstName: '', middleName: '', lastName: '', suffix: '',
   dateOfBirth: '', sex: '', civilStatus: '', nationality: '',
-  houseNo: '', street: '', purok: '',
+  homeAddress: '', houseNo: '', street: '', purok: '',
+  addressBarangay: '', addressCity: '', addressProvince: '', addressRegion: '',
   residencyStatus: '', lengthOfStay: '', voterStatus: '',
   householdId: '', mobile: '', email: '',
   idType: '', idNumber: '',
   emergencyContactName: '', emergencyContactNumber: '',
   occupation: '', educationalAttainment: '',
+  residentType: '', permanentAddress: '',
+  permanentStreet: '', permanentBarangay: '', permanentCity: '', permanentProvince: '', permanentRegion: '',
 };
 
 const SECTIONS = [
@@ -369,6 +491,7 @@ const SECTIONS = [
       { key: 'firstName',   label: 'First Name',    editable: false },
       { key: 'middleName',  label: 'Middle Name',   editable: false },
       { key: 'lastName',    label: 'Last Name',     editable: false },
+      { key: 'suffix',      label: 'Suffix',        editable: false, options: SUFFIXES },
       { key: 'dateOfBirth', label: 'Date of Birth', editable: false },
       { key: 'sex',         label: 'Sex',           editable: false, options: SEX_OPTIONS },
       { key: 'civilStatus', label: 'Civil Status',  editable: false, options: CIVIL_STATUS_OPTIONS },
@@ -384,12 +507,20 @@ const SECTIONS = [
       </svg>
     ),
     fields: [
-      { key: 'houseNo',         label: 'House No.',             editable: false },
-      { key: 'street',          label: 'Street',                editable: false },
-      { key: 'purok',           label: 'Purok',         editable: false, options: PUROK_OPTIONS },
-      { key: 'residencyStatus', label: 'Residency Status',      editable: false, options: RESIDENCY_STATUS_OPTIONS },
+      { key: 'houseNo',         label: 'House No./Street/Building No.',    editable: false },
+      { key: 'purok',           label: 'Purok',                 editable: false, options: PUROK_OPTIONS },
+      { key: 'addressBarangay', label: 'Barangay',              editable: false, type: 'presentAddress' },
+      { key: 'addressCity',     label: 'City',                  editable: false, type: 'presentAddress' },
+      { key: 'addressProvince', label: 'Province',              editable: false, type: 'presentAddressPermOnly' },
+      { key: 'addressRegion',   label: 'Region',                editable: false, type: 'presentAddress' },
+      { key: 'residencyStatus', label: 'Residency Type',        editable: false, type: 'residencyBadge' },
       { key: 'lengthOfStay',    label: 'Length of Stay',        editable: false },
       { key: 'householdId',     label: 'Household / Family ID', editable: false },
+      { key: 'permanentRegion',   label: 'Region',              editable: false, type: 'permanentAddress' },
+      { key: 'permanentProvince', label: 'Province',            editable: false, type: 'permanentAddress' },
+      { key: 'permanentCity',     label: 'City / Municipality', editable: false, type: 'permanentAddress' },
+      { key: 'permanentBarangay', label: 'Barangay',            editable: false, type: 'permanentAddress' },
+      { key: 'permanentStreet',   label: 'House No./Street/Building No.',      editable: false, type: 'permanentAddress' },
     ],
   },
   {
@@ -422,19 +553,52 @@ const SECTIONS = [
 ];
 
 function toRequestPayload(data) {
-  const fullAddress = [data.houseNo, data.street].filter(Boolean).join(', ');
+  const isTemporary = data.residentType === 'temporary' ||
+    ['Temporary Resident', 'Temporary Resident / Tenant', 'Renter', 'Boarder'].includes(data.residencyStatus || '');
+  const streetAddress = data.street || data.houseNo || '';
+  const addressBarangay = data.addressBarangay || DEFAULT_BARANGAY;
+  const addressCity = data.addressCity || DEFAULT_CITY;
+  const addressProvince = isTemporary ? '' : (data.addressProvince || DEFAULT_PROVINCE);
+  const addressRegion = data.addressRegion || DEFAULT_REGION;
+  const fullAddress = [
+    streetAddress,
+    addressBarangay,
+    addressCity,
+    ...(isTemporary ? [] : [addressProvince]),
+    addressRegion,
+  ].filter(Boolean).join(', ');
+  const permanentStreet = isTemporary ? (data.permanentStreet || '') : streetAddress;
+  const permanentBarangay = isTemporary ? (data.permanentBarangay || '') : DEFAULT_BARANGAY;
+  const permanentCity = isTemporary ? (data.permanentCity || '') : DEFAULT_CITY;
+  const permanentProvince = isTemporary ? (data.permanentProvince || '') : DEFAULT_PROVINCE;
+  const permanentRegion = isTemporary ? (data.permanentRegion || '') : DEFAULT_REGION;
+  const permanentAddress = [
+    permanentStreet,
+    permanentBarangay,
+    permanentCity,
+    permanentProvince,
+    permanentRegion,
+  ].filter(Boolean).join(', ');
+
   return {
     firstName: data.firstName || '',
     middleName: data.middleName || '',
     lastName: data.lastName || '',
+    suffix: data.suffix || '',
     birthdate: data.dateOfBirth || '',
     sex: data.sex || '',
     civilStatus: data.civilStatus || '',
     nationality: data.nationality || '',
     contactNumber: data.mobile || '',
     email: data.email || '',
-    homeAddress: fullAddress || data.street || data.houseNo || '',
+    homeAddress: fullAddress,
     purok: data.purok || '',
+    residentType: isTemporary ? 'temporary' : 'permanent',
+    addressBarangay,
+    addressCity,
+    addressProvince,
+    addressRegion,
+    permanentAddress,
     residencyStatus: data.residencyStatus || '',
     lengthOfStay: data.lengthOfStay || '',
     voterStatus: data.voterStatus || '',
@@ -443,6 +607,11 @@ function toRequestPayload(data) {
     emergencyContactNumber: data.emergencyContactNumber || '',
     occupation: data.occupation || '',
     educationalAttainment: data.educationalAttainment || '',
+    permanentStreet,
+    permanentBarangay,
+    permanentCity,
+    permanentProvince,
+    permanentRegion,
   };
 }
 
@@ -599,13 +768,17 @@ export default function UserTopbar({
   const navigate = useNavigate();
 
   // Initialise formData from: prop > storage > empty fallback
+  // normalizeUserProfile is called on the prop too so raw keys (contactNumber,
+  // birthdate) don't overwrite the normalized ones (mobile, dateOfBirth) from storage.
   const [profileBaseline, setProfileBaseline] = useState(() => {
     const stored = getStoredUser();
-    return { ...EMPTY_USER, ...(stored || {}), ...(user || {}) };
+    const normalizedProp = user ? normalizeUserProfile(user) : null;
+    return { ...EMPTY_USER, ...(stored || {}), ...(normalizedProp || {}) };
   });
   const [formData, setFormData] = useState(() => {
     const stored = getStoredUser();
-    return { ...EMPTY_USER, ...(stored || {}), ...(user || {}) };
+    const normalizedProp = user ? normalizeUserProfile(user) : null;
+    return { ...EMPTY_USER, ...(stored || {}), ...(normalizedProp || {}) };
   });
 
   const [panelOpen,     setPanelOpen]     = useState(false);
@@ -619,6 +792,14 @@ export default function UserTopbar({
   const [requestErrors, setRequestErrors] = useState({});
   const [requestSaving, setRequestSaving] = useState(false);
   const [requestSent,   setRequestSent]   = useState(false);
+  // PSGC state for request panel permanent address
+  const [reqPsgcRegions,   setReqPsgcRegions]   = useState([]);
+  const [reqPsgcProvinces, setReqPsgcProvinces] = useState([]);
+  const [reqPsgcCities,    setReqPsgcCities]    = useState([]);
+  const [reqPsgcLoading,   setReqPsgcLoading]   = useState({ regions: false, provinces: false, cities: false });
+  const [reqPsgcError,     setReqPsgcError]     = useState('');
+  const [reqRegionCode,    setReqRegionCode]     = useState('');
+  const [reqProvinceCode,  setReqProvinceCode]   = useState('');
   const [activeSection, setActiveSection] = useState(0);
   const [saved,         setSaved]         = useState(false);
   const [bellOpen,      setBellOpen]      = useState(false);
@@ -656,7 +837,12 @@ export default function UserTopbar({
   }, []);
 
   const markChatUnreadOnBackend = useCallback(async () => {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const token =
+      localStorage.getItem('token') ||
+      sessionStorage.getItem('token') ||
+      localStorage.getItem('userToken') ||
+      sessionStorage.getItem('userToken') ||
+      '';
     const apiBase = import.meta.env.VITE_BACKEND_URL || '';
     if (!token || !apiBase) return;
 
@@ -1012,10 +1198,39 @@ export default function UserTopbar({
   // If the parent passes a refreshed `user` prop later, merge it in
   useEffect(() => {
     if (user) {
-      setProfileBaseline(prev => ({ ...prev, ...user }));
-      setFormData(prev => ({ ...prev, ...user }));
+      const normalized = normalizeUserProfile(user);
+      setProfileBaseline(prev => ({ ...prev, ...normalized }));
+      setFormData(prev => ({ ...prev, ...normalized }));
     }
   }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const apiBase = import.meta.env.VITE_BACKEND_URL || '';
+    if (!token || !apiBase) return;
+
+    fetch(`${apiBase}/user/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        const registeredUser = data?.user;
+        if (cancelled || !registeredUser) return;
+        saveStoredUser(registeredUser);
+        const normalized = normalizeUserProfile(registeredUser);
+        const nextProfile = { ...EMPTY_USER, ...normalized };
+        setProfileBaseline(nextProfile);
+        setFormData(nextProfile);
+        setRequestData(prev => (requestOpen ? prev : nextProfile));
+        setRequestBirthdateDisplay(prev => (requestOpen ? prev : birthdateDisplayFromIso(nextProfile.dateOfBirth)));
+      })
+      .catch(() => {
+        /* Keep the stored profile if the refresh fails. */
+      });
+
+    return () => { cancelled = true; };
+  }, [requestOpen]);
 
   // Close side panel on outside click
   useEffect(() => {
@@ -1176,6 +1391,16 @@ export default function UserTopbar({
     setRequestStatus({ type: '', message: '' });
     setRequestErrors({});
     setRequestSent(false);
+    // Reset PSGC for request panel — reverse-map saved region name → code
+    // so the Region dropdown pre-selects the correct option on open
+    const savedRegionName = formData.permanentRegion || '';
+    const preselectedRegionCode = Object.entries(REGION_DISPLAY_NAMES)
+      .find(([, name]) => name === savedRegionName)?.[0] || '';
+    setReqRegionCode(preselectedRegionCode);
+    setReqProvinceCode('');
+    setReqPsgcProvinces([]);
+    setReqPsgcCities([]);
+    setReqPsgcError('');
     setRequestOpen(true);
   }
 
@@ -1207,6 +1432,18 @@ export default function UserTopbar({
     if (requestStatus.type === 'error') setRequestStatus({ type: '', message: '' });
   }
 
+  function handleRequestStreetChange(value) {
+    setRequestData(prev => ({ ...prev, houseNo: value, street: value }));
+    setRequestErrors(prev => {
+      if (!prev.houseNo && !prev.street) return prev;
+      const next = { ...prev };
+      delete next.houseNo;
+      delete next.street;
+      return next;
+    });
+    if (requestStatus.type === 'error') setRequestStatus({ type: '', message: '' });
+  }
+
   function handleRequestBirthdateTextChange(e) {
     const raw = e.target.value.replace(/\D/g, '').slice(0, 8);
     setRequestBirthdateDisplay(formatBirthdateDigits(raw));
@@ -1224,6 +1461,79 @@ export default function UserTopbar({
   function handleRequestBirthdatePick(value) {
     setRequestBirthdateDisplay(birthdateDisplayFromIso(value));
     handleRequestFieldChange('dateOfBirth', value);
+  }
+
+  // PSGC fetch for request panel — load regions once when panel opens for a temporary resident
+  useEffect(() => {
+    const isTemporary = ['Temporary Resident', 'Temporary Resident / Tenant'].includes(requestData.residencyStatus);
+    if (!requestOpen || !isTemporary) return;
+    if (reqPsgcRegions.length > 0) return;
+    let cancelled = false;
+    setReqPsgcLoading(p => ({ ...p, regions: true }));
+    fetch(`${PSGC_API_URL}/regions`)
+      .then(r => r.json())
+      .then(data => { if (!cancelled) setReqPsgcRegions(sortRegions(Array.isArray(data) ? data : [])); })
+      .catch(() => { if (!cancelled) setReqPsgcError('Unable to load regions. Check your connection.'); })
+      .finally(() => { if (!cancelled) setReqPsgcLoading(p => ({ ...p, regions: false })); });
+    return () => { cancelled = true; };
+  }, [requestOpen, requestData.residencyStatus, reqPsgcRegions.length]);
+
+  useEffect(() => {
+    if (!reqRegionCode) { setReqPsgcProvinces([]); return; }
+    let cancelled = false;
+    setReqPsgcLoading(p => ({ ...p, provinces: true }));
+    fetch(`${PSGC_API_URL}/regions/${reqRegionCode}/provinces`)
+      .then(r => r.json())
+      .then(data => { if (!cancelled) setReqPsgcProvinces(sortPsgcList(Array.isArray(data) ? data : [])); })
+      .catch(() => { if (!cancelled) setReqPsgcError('Unable to load provinces.'); })
+      .finally(() => { if (!cancelled) setReqPsgcLoading(p => ({ ...p, provinces: false })); });
+    return () => { cancelled = true; };
+  }, [reqRegionCode]);
+
+  // After provinces load, reverse-map the saved province name → code
+  // so the Province dropdown pre-selects the correct option
+  useEffect(() => {
+    if (!reqPsgcProvinces.length || reqProvinceCode) return;
+    const savedProvinceName = requestData.permanentProvince || '';
+    if (!savedProvinceName) return;
+    const match = reqPsgcProvinces.find(p => getPsgcName(p) === savedProvinceName);
+    if (match) setReqProvinceCode(match.code);
+  }, [reqPsgcProvinces]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!reqProvinceCode) { setReqPsgcCities([]); return; }
+    let cancelled = false;
+    setReqPsgcLoading(p => ({ ...p, cities: true }));
+    fetch(`${PSGC_API_URL}/provinces/${reqProvinceCode}/cities-municipalities`)
+      .then(r => r.json())
+      .then(data => { if (!cancelled) setReqPsgcCities(sortPsgcList(Array.isArray(data) ? data : [])); })
+      .catch(() => { if (!cancelled) setReqPsgcError('Unable to load cities/municipalities.'); })
+      .finally(() => { if (!cancelled) setReqPsgcLoading(p => ({ ...p, cities: false })); });
+    return () => { cancelled = true; };
+  }, [reqProvinceCode]);
+
+  function handleReqRegionChange(code) {
+    const selected = reqPsgcRegions.find(r => r.code === code);
+    setReqRegionCode(code);
+    setReqProvinceCode('');
+    setReqPsgcProvinces([]);
+    setReqPsgcCities([]);
+    handleRequestFieldChange('permanentRegion', selected ? getRegionDisplayName(selected) : '');
+    handleRequestFieldChange('permanentProvince', '');
+    handleRequestFieldChange('permanentCity', '');
+  }
+
+  function handleReqProvinceChange(code) {
+    const selected = reqPsgcProvinces.find(p => p.code === code);
+    setReqProvinceCode(code);
+    setReqPsgcCities([]);
+    handleRequestFieldChange('permanentProvince', selected ? getPsgcName(selected) : '');
+    handleRequestFieldChange('permanentCity', '');
+  }
+
+  function handleReqCityChange(code) {
+    const selected = reqPsgcCities.find(c => c.code === code);
+    handleRequestFieldChange('permanentCity', selected ? getPsgcName(selected) : '');
   }
 
   async function submitInformationRequest() {
@@ -1322,10 +1632,21 @@ export default function UserTopbar({
   }
 
   const fullName     = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(' ') || 'Resident';
-  const shortAddress = [formData.purok, formData.street].filter(Boolean).join(', ') || 'New Cabalan';
+  const shortAddress = [formData.purok, formData.houseNo].filter(Boolean).join(', ') || formData.homeAddress || 'New Cabalan';
   const requestPreviewChanges = getChangedProfileData(profileBaseline, requestData);
   const requestProofFields = getProofRequiredFields(requestPreviewChanges);
   const requestNeedsProof = requestProofFields.length > 0;
+
+  // Age calc for request panel (derived from requestData.dateOfBirth)
+  const requestAge = (() => {
+    if (!requestData.dateOfBirth) return '';
+    const [yyyy, mm, dd] = requestData.dateOfBirth.split('-').map(Number);
+    if (!yyyy || !mm || !dd) return '';
+    const today = new Date();
+    let a = today.getFullYear() - yyyy;
+    if (today < new Date(today.getFullYear(), mm - 1, dd)) a -= 1;
+    return isNaN(a) ? '' : String(a);
+  })();
 
   // Age calc
   const age = (() => {
@@ -1759,32 +2080,90 @@ export default function UserTopbar({
                 </div>
 
                 <div className="utb-modal-fields">
-                  {SECTIONS[activeSection].fields.map(field => (
-                    <div className="utb-field" key={field.key}>
-                      <label className="utb-field-label">
-                        {field.label}
-                        {!field.editable && (
-                          <span className="utb-field-lock">
-                            <LockIcon/> Read-only
-                          </span>
-                        )}
-                      </label>
-                      {field.editable ? (
-                        <FieldControl
-                          field={field}
-                          className="utb-field-input utb-field-input--editable"
-                          value={formData[field.key] || ''}
-                          onChange={value => handleFieldChange(field.key, value)}
-                        />
-                      ) : (
-                        <div className="utb-field-input utb-field-input--readonly">
-                          {field.key === 'dateOfBirth'
-                            ? formatDate(formData[field.key])
-                            : (formData[field.key] || '—')}
+                  {(() => {
+                    const isTemporary = formData.residentType === 'temporary' ||
+                      ['Temporary Resident', 'Temporary Resident / Tenant', 'Renter', 'Boarder'].includes(formData.residencyStatus);
+                    const hasPermanentAddress = [
+                      formData.permanentStreet,
+                      formData.permanentBarangay,
+                      formData.permanentCity,
+                      formData.permanentProvince,
+                      formData.permanentRegion,
+                      formData.permanentAddress,
+                    ].some(Boolean);
+                    const showPermanentAddress = isTemporary || hasPermanentAddress;
+                    const fields = SECTIONS[activeSection].fields;
+                    const firstPermIdx = fields.findIndex(f => f.type === 'permanentAddress');
+                    return fields.map((field, idx) => {
+                      // Skip permanentAddress fields only when there is nothing to show.
+                      if (field.type === 'permanentAddress' && !showPermanentAddress) return null;
+                      // Province of current address only shown for permanent residents (mirrors signup)
+                      if (field.type === 'presentAddressPermOnly' && isTemporary) return null;
+
+                      const showPresentHeading = field.key === 'houseNo' && isTemporary;
+                      const showPermanentHeading = field.type === 'permanentAddress' && idx === firstPermIdx;
+
+                      const presentDefaults = {
+                        addressBarangay: DEFAULT_BARANGAY,
+                        addressCity:     DEFAULT_CITY,
+                        addressProvince: DEFAULT_PROVINCE,
+                        addressRegion:   DEFAULT_REGION,
+                      };
+                      const isPresentField = field.type === 'presentAddress' || field.type === 'presentAddressPermOnly';
+                      let displayValue = isPresentField
+                        ? (formData[field.key] || presentDefaults[field.key] || '—')
+                        : (formData[field.key] || '—');
+
+                      return (
+                        <>
+                          {showPresentHeading && (
+                            <div className="utb-address-section-heading utb-address-section-heading--present">
+                              Present Address in Barangay New Cabalan
+                            </div>
+                          )}
+                          {showPermanentHeading && (
+                            <div className="utb-address-section-heading utb-address-section-heading--permanent">
+                              Permanent Address
+                            </div>
+                          )}
+                        <div className="utb-field" key={field.key}>
+                          <label className="utb-field-label">
+                            {field.label}
+                            {!field.editable && (
+                              <span className="utb-field-lock">
+                                <LockIcon/> Read-only
+                              </span>
+                            )}
+                          </label>
+                          {field.type === 'residencyBadge' ? (
+                            <div className="utb-field-input utb-field-input--readonly">
+                              <span className={`utb-residency-badge${isTemporary ? ' utb-residency-badge--temporary' : ' utb-residency-badge--permanent'}`}>
+                                {formData.residencyStatus || '—'}
+                              </span>
+                            </div>
+                          ) : (isPresentField || field.type === 'permanentAddress') ? (
+                            <div className="utb-field-input utb-field-input--readonly">
+                              {displayValue}
+                            </div>
+                          ) : field.editable ? (
+                            <FieldControl
+                              field={field}
+                              className="utb-field-input utb-field-input--editable"
+                              value={formData[field.key] || ''}
+                              onChange={value => handleFieldChange(field.key, value)}
+                            />
+                          ) : (
+                            <div className="utb-field-input utb-field-input--readonly">
+                              {field.key === 'dateOfBirth'
+                                ? formatDate(formData[field.key])
+                                : (formData[field.key] || '—')}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        </>
+                      );
+                    });
+                  })()}
                 </div>
 
                 {/* Footer */}
@@ -1884,50 +2263,268 @@ export default function UserTopbar({
                 <section className="utb-request-section" key={section.label}>
                   <h3>{section.label}</h3>
                   <div className="utb-request-grid">
-                    {section.fields.map(field => (
-                      <label className="utb-request-field" key={field.key}>
-                        <span>{field.label}</span>
-                        {field.key === 'dateOfBirth' ? (
-                          <>
-                            <div className="utb-date-input-wrap">
-                              <input
-                                type="text"
-                                placeholder="MM/DD/YYYY"
-                                maxLength={10}
-                                value={requestBirthdateDisplay}
-                                onChange={handleRequestBirthdateTextChange}
-                                onKeyDown={handleRequestBirthdateKeyDown}
-                                className={`utb-request-date-input${requestErrors.dateOfBirth ? ' utb-input--error' : ''}`}
-                              />
-                              <input
-                                type="date"
-                                max={getAdultBirthdateMax()}
-                                value={requestData.dateOfBirth || ''}
-                                onChange={e => handleRequestBirthdatePick(e.target.value)}
-                                className="utb-date-picker-input"
-                                tabIndex={-1}
-                                aria-label="Pick date of birth"
-                              />
-                              <span className="utb-date-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-                                  <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                                </svg>
-                              </span>
-                            </div>
-                            {requestErrors.dateOfBirth && (
-                              <p className="utb-request-field-error">{requestErrors.dateOfBirth}</p>
+
+                    {/* ── Home & Residency — mirrors signup exactly ── */}
+                    {section.label === 'Home & Residency' && (() => {
+                      const reqResType = (() => {
+                        const s = requestData.residencyStatus || '';
+                        if (s === 'Permanent Resident') return 'permanent';
+                        if (['Temporary Resident', 'Temporary Resident / Tenant', 'Renter', 'Boarder'].includes(s)) return 'temporary';
+                        return '';
+                      })();
+                      const isTemp = reqResType === 'temporary';
+                      return (
+                        <>
+                          {/* Residency Type */}
+                          <label className="utb-request-field utb-request-field--full">
+                            <span>Residency Type</span>
+                            <select
+                              value={reqResType}
+                              onChange={e => {
+                                const val = e.target.value;
+                                const statusLabel = val === 'permanent' ? 'Permanent Resident' : val === 'temporary' ? 'Temporary Resident / Tenant' : '';
+                                handleRequestFieldChange('residencyStatus', statusLabel);
+                                if (val === 'permanent') {
+                                  handleRequestFieldChange('permanentStreet', '');
+                                  handleRequestFieldChange('permanentBarangay', '');
+                                  handleRequestFieldChange('permanentCity', '');
+                                  handleRequestFieldChange('permanentProvince', '');
+                                  handleRequestFieldChange('permanentRegion', '');
+                                  setReqRegionCode('');
+                                  setReqProvinceCode('');
+                                  setReqPsgcProvinces([]);
+                                  setReqPsgcCities([]);
+                                }
+                              }}
+                            >
+                              <option value="">Select residency type</option>
+                              {RESIDENCY_TYPES.map(type => (
+                                <option key={type.value} value={type.value}>{type.label}</option>
+                              ))}
+                            </select>
+                            {requestData.residencyStatus === 'Permanent Resident' &&
+                             ['Temporary Resident', 'Temporary Resident / Tenant', 'Renter', 'Boarder'].includes(formData.residencyStatus) && (
+                              <p className="utb-residency-change-note">
+                                Changing to Permanent Resident will clear your permanent address on file. The admin will verify this change.
+                              </p>
                             )}
-                          </>
-                        ) : (
-                          <FieldControl
-                            field={{ ...field, type: field.type || 'text' }}
-                            value={requestData[field.key] || ''}
-                            onChange={value => handleRequestFieldChange(field.key, value)}
-                          />
-                        )}
+                          </label>
+
+                          {/* Present Address heading — only for temporary, mirrors signup */}
+                          {isTemp && (
+                            <p className="utb-request-address-heading utb-request-field--full">
+                              Present Address in Barangay New Cabalan
+                            </p>
+                          )}
+
+                          {/* House No. / Street */}
+                          <label className="utb-request-field utb-request-field--full">
+                            <span>House No./Street/Building No.</span>
+                            <input
+                              type="text"
+                              value={requestData.street || requestData.houseNo || ''}
+                              onChange={e => handleRequestStreetChange(e.target.value)}
+                              placeholder="123 Mangga St."
+                              disabled={!reqResType}
+                            />
+                          </label>
+
+                          {/* Purok */}
+                          <label className="utb-request-field utb-request-field--full">
+                            <span>Purok</span>
+                            <select
+                              value={requestData.purok || ''}
+                              onChange={e => handleRequestFieldChange('purok', e.target.value)}
+                              disabled={!reqResType}
+                            >
+                              <option value="">Select Purok...</option>
+                              {PUROK_OPTIONS.map(p => <option key={p}>{p}</option>)}
+                            </select>
+                          </label>
+
+                          {/* Fixed: Barangay + City */}
+                          <label className="utb-request-field">
+                            <span>Barangay</span>
+                            <input type="text" value={DEFAULT_BARANGAY} disabled style={{ backgroundColor: 'var(--utb-field-disabled-bg, #f3f4f6)', color: 'var(--utb-field-disabled-color, #9ca3af)' }} />
+                          </label>
+                          <label className="utb-request-field">
+                            <span>City</span>
+                            <input type="text" value={DEFAULT_CITY} disabled style={{ backgroundColor: 'var(--utb-field-disabled-bg, #f3f4f6)', color: 'var(--utb-field-disabled-color, #9ca3af)' }} />
+                          </label>
+
+                          {/* Province — shown for permanent only (mirrors signup) */}
+                          {!isTemp && (
+                            <label className="utb-request-field">
+                              <span>Province</span>
+                              <input type="text" value={DEFAULT_PROVINCE} disabled style={{ backgroundColor: 'var(--utb-field-disabled-bg, #f3f4f6)', color: 'var(--utb-field-disabled-color, #9ca3af)' }} />
+                            </label>
+                          )}
+
+                          {/* Region — always shown */}
+                          <label className="utb-request-field">
+                            <span>Region</span>
+                            <input type="text" value={DEFAULT_REGION} disabled style={{ backgroundColor: 'var(--utb-field-disabled-bg, #f3f4f6)', color: 'var(--utb-field-disabled-color, #9ca3af)' }} />
+                          </label>
+
+                          {/* Permanent Address — only for temporary, with full PSGC cascade */}
+                          {isTemp && (
+                            <div className="utb-request-field--full utb-permanent-address-block">
+                              <p className="utb-request-address-heading">Permanent Address</p>
+                              {reqPsgcError && (
+                                <p className="utb-request-field-error" style={{ marginBottom: 8 }}>{reqPsgcError}</p>
+                              )}
+                              <div className="utb-request-grid">
+                                <label className="utb-request-field">
+                                  <span>Region</span>
+                                  <select
+                                    className={requestErrors.permanentRegion ? 'utb-input--error' : ''}
+                                    value={reqRegionCode}
+                                    onChange={e => handleReqRegionChange(e.target.value)}
+                                    disabled={reqPsgcLoading.regions}
+                                  >
+                                    <option value="">{reqPsgcLoading.regions ? 'Loading regions...' : 'Select Region'}</option>
+                                    {reqPsgcRegions.map(r => (
+                                      <option key={r.code} value={r.code}>{getRegionDisplayName(r)}</option>
+                                    ))}
+                                  </select>
+                                  {requestErrors.permanentRegion && <p className="utb-request-field-error">{requestErrors.permanentRegion}</p>}
+                                </label>
+                                <label className="utb-request-field">
+                                  <span>Province</span>
+                                  <select
+                                    className={requestErrors.permanentProvince ? 'utb-input--error' : ''}
+                                    value={reqProvinceCode}
+                                    onChange={e => handleReqProvinceChange(e.target.value)}
+                                    disabled={!reqRegionCode || reqPsgcLoading.provinces}
+                                  >
+                                    <option value="">{reqPsgcLoading.provinces ? 'Loading provinces...' : 'Select Province'}</option>
+                                    {reqPsgcProvinces.map(p => (
+                                      <option key={p.code} value={p.code}>{getPsgcName(p)}</option>
+                                    ))}
+                                  </select>
+                                  {requestErrors.permanentProvince && <p className="utb-request-field-error">{requestErrors.permanentProvince}</p>}
+                                </label>
+                                <label className="utb-request-field">
+                                  <span>City / Municipality</span>
+                                  <select
+                                    className={requestErrors.permanentCity ? 'utb-input--error' : ''}
+                                    value={reqPsgcCities.find(c => getPsgcName(c) === requestData.permanentCity)?.code || ''}
+                                    onChange={e => handleReqCityChange(e.target.value)}
+                                    disabled={!reqProvinceCode || reqPsgcLoading.cities}
+                                  >
+                                    <option value="">{reqPsgcLoading.cities ? 'Loading cities/municipalities...' : 'Select City / Municipality'}</option>
+                                    {reqPsgcCities.map(c => (
+                                      <option key={c.code} value={c.code}>{getPsgcName(c)}</option>
+                                    ))}
+                                  </select>
+                                  {requestErrors.permanentCity && <p className="utb-request-field-error">{requestErrors.permanentCity}</p>}
+                                </label>
+                                <label className="utb-request-field">
+                                  <span>Barangay</span>
+                                  <input
+                                    type="text"
+                                    value={requestData.permanentBarangay || ''}
+                                    onChange={e => handleRequestFieldChange('permanentBarangay', e.target.value)}
+                                    placeholder="San Isidro"
+                                    className={requestErrors.permanentBarangay ? 'utb-input--error' : ''}
+                                  />
+                                  {requestErrors.permanentBarangay && <p className="utb-request-field-error">{requestErrors.permanentBarangay}</p>}
+                                </label>
+                                <label className="utb-request-field utb-request-field--full">
+                                  <span>House No./Street/Building No.</span>
+                                  <input
+                                    type="text"
+                                    value={requestData.permanentStreet || ''}
+                                    onChange={e => handleRequestFieldChange('permanentStreet', e.target.value)}
+                                    placeholder="45 Sampaguita St."
+                                    className={requestErrors.permanentStreet ? 'utb-input--error' : ''}
+                                  />
+                                  {requestErrors.permanentStreet && <p className="utb-request-field-error">{requestErrors.permanentStreet}</p>}
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+
+                    {/* Regular fields (Home & Residency address fields handled above; permanentAddress-type, presentAddress-type, and residencyStatus also skipped) */}
+                    {section.fields
+                      .filter(field =>
+                        field.type !== 'permanentAddress' &&
+                        field.type !== 'presentAddress' &&
+                        field.type !== 'presentAddressPermOnly' &&
+                        field.key !== 'residencyStatus' &&
+                        !(section.label === 'Home & Residency' && ['houseNo', 'street', 'purok'].includes(field.key))
+                      )
+                      .map(field => (
+                        <label className="utb-request-field" key={field.key}>
+                          <span>{field.label}</span>
+                          {field.key === 'dateOfBirth' ? (
+                            <>
+                              <div className="utb-date-input-wrap">
+                                <input
+                                  type="text"
+                                  placeholder="MM/DD/YYYY"
+                                  maxLength={10}
+                                  value={requestBirthdateDisplay}
+                                  onChange={handleRequestBirthdateTextChange}
+                                  onKeyDown={handleRequestBirthdateKeyDown}
+                                  className={`utb-request-date-input${requestErrors.dateOfBirth ? ' utb-input--error' : ''}`}
+                                />
+                                <input
+                                  type="date"
+                                  max={getAdultBirthdateMax()}
+                                  value={requestData.dateOfBirth || ''}
+                                  onChange={e => handleRequestBirthdatePick(e.target.value)}
+                                  className="utb-date-picker-input"
+                                  tabIndex={-1}
+                                  aria-label="Pick date of birth"
+                                />
+                                <span className="utb-date-icon">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+                                    <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                                  </svg>
+                                </span>
+                              </div>
+                              {requestErrors.dateOfBirth && (
+                                <p className="utb-request-field-error">{requestErrors.dateOfBirth}</p>
+                              )}
+                            </>
+                          ) : field.key === 'suffix' ? (
+                            <select
+                              value={requestData.suffix || ''}
+                              onChange={e => handleRequestFieldChange('suffix', e.target.value)}
+                            >
+                              <option value="">None</option>
+                              {SUFFIXES.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          ) : (
+                            <FieldControl
+                              field={{ ...field, type: field.type || 'text' }}
+                              value={requestData[field.key] || ''}
+                              onChange={value => handleRequestFieldChange(field.key, value)}
+                            />
+                          )}
+                        </label>
+                      ))
+                    }
+
+                    {/* Age field — auto-calculated, read-only, shown in Personal Information */}
+                    {section.label === 'Personal Information' && (
+                      <label className="utb-request-field">
+                        <span>Age</span>
+                        <input
+                          type="text"
+                          value={requestAge}
+                          readOnly
+                          disabled
+                          placeholder="Auto-calculated"
+                          style={{ backgroundColor: 'var(--utb-field-disabled-bg, #f3f4f6)', color: 'var(--utb-field-disabled-color, #9ca3af)', cursor: 'not-allowed' }}
+                        />
                       </label>
-                    ))}
+                    )}
                   </div>
                 </section>
               ))}

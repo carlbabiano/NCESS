@@ -1053,7 +1053,7 @@ input.su-bday-input {
   font-weight: 800 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.5px !important;
-  margin: 0 0 10px !important;
+  margin: 16px 0 10px !important;
 }
 
 /* Read-only fields — same border/radius as editable, but muted bg */

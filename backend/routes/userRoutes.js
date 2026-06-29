@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema({
   firstName:     { type: String, default: '' },
   middleName:    { type: String, default: '' },
   lastName:      { type: String, default: '' },
+  suffix:        { type: String, default: '' },
   birthdate:     { type: String, default: '' },
   sex:           { type: String, default: '' },
   civilStatus:   { type: String, default: '' },
@@ -238,7 +239,7 @@ router.post("/usersignup/check-email", async (req, res) => {
 router.post("/usersignup", async (req, res) => {
   const {
     email, password,
-    firstName, middleName, lastName,
+    firstName, middleName, lastName, suffix,
     birthdate, sex, contactNumber,
     homeAddress, purok,
     residentType, residencyStatus,
@@ -276,6 +277,7 @@ router.post("/usersignup", async (req, res) => {
         existingUser.firstName     = firstName     || '';
         existingUser.middleName    = middleName    || '';
         existingUser.lastName      = lastName      || '';
+        existingUser.suffix        = suffix        || '';
         existingUser.birthdate     = birthdate     || '';
         existingUser.sex           = sex           || '';
         existingUser.contactNumber = contactNumber || '';
@@ -309,7 +311,7 @@ router.post("/usersignup", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({
       email: normalizedEmail, password: hashedPassword, status: 'pending',
-      firstName: firstName || '', middleName: middleName || '', lastName: lastName || '',
+      firstName: firstName || '', middleName: middleName || '', lastName: lastName || '', suffix: suffix || '',
       birthdate: birthdate || '', sex: sex || '', contactNumber: contactNumber || '',
       homeAddress: homeAddress || '', purok: purok || '',
       residentType: residentType === 'temporary' ? 'temporary' : 'permanent',
@@ -966,9 +968,23 @@ function requireUser(req, res, next) {
   }
 }
 
+router.get("/user/me", requireUser, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.status(200).json({ user: safeUser(user) });
+  } catch (error) {
+    console.error("Fetch user profile error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 const PROFILE_CHANGE_FIELDS = [
-  'firstName', 'middleName', 'lastName', 'birthdate', 'sex', 'civilStatus', 'nationality',
-  'contactNumber', 'email', 'homeAddress', 'purok', 'residencyStatus', 'lengthOfStay', 'voterStatus',
+  'firstName', 'middleName', 'lastName', 'suffix', 'birthdate', 'sex', 'civilStatus', 'nationality',
+  'contactNumber', 'email', 'homeAddress', 'purok', 'residentType',
+  'addressBarangay', 'addressCity', 'addressProvince', 'addressRegion',
+  'permanentAddress', 'permanentStreet', 'permanentBarangay', 'permanentCity', 'permanentProvince', 'permanentRegion',
+  'residencyStatus', 'lengthOfStay', 'voterStatus',
   'householdId', 'emergencyContactName', 'emergencyContactNumber', 'occupation',
   'educationalAttainment',
 ];

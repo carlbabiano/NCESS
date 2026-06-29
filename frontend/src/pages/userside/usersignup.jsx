@@ -850,11 +850,13 @@ export default function UserSignup() {
               {residentType === 'temporary' && (
                 <h3 className="su-summary-address-title" style={{ marginTop: 16 }}>Present Address in Barangay New Cabalan</h3>
               )}
-              <div style={{ marginTop: 16 }}>
-                <label className="su-summary-address-title" style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>House No./Street/Building No.</label>
-                <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} disabled={!hasSelectedResidencyType} style={{ width: '100%', padding: '8px 12px', border: errors.homeAddress ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
-                {errors.homeAddress && <p className="su-field-error">{errors.homeAddress}</p>}
-              </div>
+              {residentType !== 'temporary' && (
+                <div style={{ marginTop: 16 }}>
+                  <label className="su-summary-address-title" style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>House No./Street/Building No.</label>
+                  <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)} disabled={!hasSelectedResidencyType} style={{ width: '100%', padding: '8px 12px', border: errors.homeAddress ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                  {errors.homeAddress && <p className="su-field-error">{errors.homeAddress}</p>}
+                </div>
+              )}
               <div style={{ marginTop: 12 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Purok</label>
                 <select className="su-select" value={purok} onChange={e => setPurok(e.target.value)} disabled={!hasSelectedResidencyType} style={{ width: '100%', border: errors.purok ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13, backgroundColor: '#fff' }}>
@@ -919,7 +921,7 @@ export default function UserSignup() {
                     </div>
                   </div>
                   <div style={{ marginTop: 12 }}>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>Street Address</label>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>House No./Street/Building No.</label>
                     <input type="text" value={permanentStreet} onChange={e => setPermanentStreet(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: errors.permanentStreet ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                     {errors.permanentStreet && <p className="su-field-error">{errors.permanentStreet}</p>}
                   </div>
@@ -1368,7 +1370,7 @@ export default function UserSignup() {
                       {errors.permanentBarangay && <p className="su-field-error">{errors.permanentBarangay}</p>}
                     </div>
                     <div className="su-field">
-                      <label>Street Address</label>
+                      <label>House No./Street/Building No.</label>
                       <input type="text" placeholder="45 Sampaguita St." value={permanentStreet} onChange={e => setPermanentStreet(e.target.value)} className={errors.permanentStreet ? 'su-input--error' : ''}/>
                       {errors.permanentStreet && <p className="su-field-error">{errors.permanentStreet}</p>}
                     </div>
