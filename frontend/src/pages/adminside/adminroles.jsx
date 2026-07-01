@@ -47,6 +47,12 @@ const ACCOUNT_STATUS_LABELS = {
 
 const SUPER_ADMIN_ROLES = ['barangaycaptain', 'secretary'];
 
+// Max accounts allowed per role. Roles not listed here have no limit.
+const ROLE_LIMITS = {
+  barangaycaptain: 2,
+  secretary:       2,
+};
+
 // ── Avatar helpers ────────────────────────────────────────────────────────────
 function DefaultAvatar({ admin, size = 46, className = '' }) {
   const firstName = admin?.firstName || '';
@@ -130,7 +136,7 @@ function StatusBadge({ status }) {
 }
 
 // ── Create / Edit Modal ───────────────────────────────────────────────────────
-function AdminFormModal({ mode, admin, currentAdminId, onClose, onSaved }) {
+function AdminFormModal({ mode, admin, initialRole, currentAdminId, onClose, onSaved }) {
   const isEdit = mode === 'edit';
   const [form, setForm] = useState({
     firstName:  admin?.firstName  || '',
@@ -138,7 +144,7 @@ function AdminFormModal({ mode, admin, currentAdminId, onClose, onSaved }) {
     lastName:   admin?.lastName   || '',
     suffix:     admin?.suffix     || '',
     email:      admin?.email      || '',
-    role:       admin?.role       || 'secretary',
+    role:       admin?.role       || initialRole || 'secretary',
     mobileNo:   admin?.mobileNo   || '',
     password:   '',
     reason:     '',
@@ -264,19 +270,21 @@ function AdminFormModal({ mode, admin, currentAdminId, onClose, onSaved }) {
             />
           </div>
 
-          <div className="aroles-field">
-            <label>Role</label>
-            <select value={form.role} onChange={set('role')} disabled={isSelf}>
-              {ROLES.map(r => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-            {isSelf && (
-              <span style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
-                You cannot change your own role.
-              </span>
-            )}
-          </div>
+          {isEdit && (
+            <div className="aroles-field">
+              <label>Role</label>
+              <select value={form.role} onChange={set('role')} disabled={isSelf}>
+                {ROLES.map(r => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+              {isSelf && (
+                <span style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
+                  You cannot change your own role.
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Reason field — required when changing a role in edit mode */}
           {isEdit && (
@@ -314,10 +322,10 @@ function AdminFormModal({ mode, admin, currentAdminId, onClose, onSaved }) {
         </div>
 
         <div className="aroles-modal__footer">
-          <button className="aroles-modal__cancel" onClick={onClose}>Cancel</button>
           <button className="aroles-modal__save" onClick={handleSubmit} disabled={loading}>
             {loading ? <><span className="aroles-spinner" /> Saving...</> : (isEdit ? 'Save Changes' : 'Create Account')}
           </button>
+          <button className="aroles-modal__cancel" onClick={onClose}>Cancel</button>
         </div>
       </div>
     </div>
@@ -1027,32 +1035,57 @@ export default function AdminRoles() {
                 },
               ]}
               count={`Showing ${displayed.length} admins`}
-              actions={(
-              <button className="aroles-add-btn" onClick={() => setModal({ type: 'create' })}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                Add Roles
-              </button>
-              )}
             />
 
             {/* Rows organized by role */}
             {loading ? (
               <div className="aroles-empty">Loading admin accounts...</div>
-            ) : displayed.length === 0 ? (
-              <div className="aroles-empty">No admin accounts found.</div>
             ) : (
               <div className="aroles-rows-container">
-                {ROLES.map(roleObj => {
+                {ROLES.filter(r => filterRole === 'All' || filterRole === r.value).map(roleObj => {
+                  // Real (unfiltered by search/status-tab) active headcount — used for the
+                  // 2-account cap on Captain/Secretary so it isn't skewed by search text.
+                  const roleAccounts = admins.filter(a => a.role === roleObj.value && (a.accountStatus || 'active') === 'active');
+                  // What actually renders as rows, respecting search + status tab filters.
                   const adminsInRole = displayed.filter(a => a.role === roleObj.value);
-                  if (adminsInRole.length === 0) return null;
+
+                  const limit        = ROLE_LIMITS[roleObj.value];
+                  const atLimit      = limit !== undefined && roleAccounts.length >= limit;
+                  const assignLabel  = roleAccounts.length === 0
+                    ? `Assign ${roleObj.label}`
+                    : `Assign new ${roleObj.label}`;
 
                   return (
                     <div className="aroles-role-section" key={roleObj.value}>
-                      <h3 className="aroles-role-section__title">
-                        {roleObj.label}
-                      </h3>
+                      <div className="aroles-role-section__header">
+                        <h3 className="aroles-role-section__title">
+                          {roleObj.label}
+                          {limit !== undefined && (
+                            <span className="aroles-role-section__count">
+                              {roleAccounts.length}/{limit}
+                            </span>
+                          )}
+                        </h3>
+                        {filterStatus !== 'active' ? null : atLimit ? (
+                          <span className="aroles-role-section__limit">Limit reached</span>
+                        ) : (
+                          <button
+                            className="aroles-role-section__assign-btn"
+                            onClick={() => setModal({ type: 'create', initialRole: roleObj.value })}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            {assignLabel}
+                          </button>
+                        )}
+                      </div>
+
+                      {adminsInRole.length === 0 ? (
+                        <p className="aroles-role-section__empty">
+                          {roleAccounts.length === 0 ? 'No one assigned yet.' : 'No accounts match the current filters.'}
+                        </p>
+                      ) : (
                       <div className="aroles-rows-list">
                         {adminsInRole.map(a => {
                           const displayName = [a.firstName, a.lastName].filter(Boolean).join(' ') || '—';
@@ -1165,6 +1198,7 @@ export default function AdminRoles() {
                           );
                         })}
                       </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1196,7 +1230,7 @@ export default function AdminRoles() {
         />
       )}
       {modal?.type === 'create' && (
-        <AdminFormModal mode="create" currentAdminId={currentId} onClose={() => setModal(null)} onSaved={handleSaved} />
+        <AdminFormModal mode="create" initialRole={modal.initialRole} currentAdminId={currentId} onClose={() => setModal(null)} onSaved={handleSaved} />
       )}
       {modal?.type === 'edit' && (
         <AdminFormModal mode="edit" admin={modal.admin} currentAdminId={currentId} onClose={() => setModal(null)} onSaved={handleSaved} />
