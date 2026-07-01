@@ -648,6 +648,155 @@ select.utb-field-input {
   cursor: pointer;
 }
 .utb-request-btn:hover { background: #dbeafe; border-color: #93c5fd; }
+.utb-request-btn:disabled {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+.utb-request-btn:disabled:hover { background: #f3f4f6; border-color: #e5e7eb; }
+
+.utb-view-pending-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: 1.5px solid #fde68a;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+.utb-view-pending-btn:hover { background: #fef3c7; border-color: #fcd34d; }
+
+/* ─── Denial banner inside view-only request panel ─────── */
+.utb-denial-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 24px 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1.5px solid #fecaca;
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.utb-denial-banner strong {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.utb-denial-notes {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: #7f1d1d;
+  font-size: 12.5px;
+}
+.utb-denial-notes li { margin-bottom: 2px; }
+
+/* ─── Partial-approval banner (mirrors denial banner, amber tone) ──── */
+.utb-partial-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 24px 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1.5px solid #fed7aa;
+  color: #c2410c;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.utb-partial-banner strong {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.utb-partial-banner .utb-denial-notes { color: #9a3412; }
+
+/* ─── Status badge shown next to the view-panel title ───────────────── */
+.utb-status-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.utb-status-badge--pending {
+  background: #fffbeb; color: #b45309; border: 1px solid #fde68a;
+}
+.utb-status-badge--denied {
+  background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+}
+.utb-status-badge--partial {
+  background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;
+}
+.utb-status-badge--approved {
+  background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0;
+}
+
+
+.utb-request-panel--viewonly .utb-request-field input,
+.utb-request-panel--viewonly .utb-request-field select,
+.utb-request-panel--viewonly .utb-request-field textarea {
+  pointer-events: none;
+  background: #f9fafb;
+}
+.utb-request-panel--viewonly input[type="file"] { display: none; }
+
+.utb-request-field--pending {
+  position: relative;
+  border-radius: 8px;
+  background: #fffbeb;
+  outline: 1.5px solid #fde68a;
+  padding: 6px 8px;
+}
+.utb-request-field--denied {
+  position: relative;
+  border-radius: 8px;
+  background: #fef2f2;
+  outline: 1.5px solid #fca5a5;
+  padding: 6px 8px;
+}
+.utb-request-field--approved {
+  position: relative;
+  border-radius: 8px;
+  background: #f0fdf4;
+  outline: 1.5px solid #86efac;
+  padding: 6px 8px;
+}
+.utb-pending-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+.utb-pending-badge--denied { background: #dc2626; }
+.utb-pending-badge--approved { background: #16a34a; }
+.utb-field-denial-reason {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #b91c1c;
+}
 
 .utb-save-note {
   font-size: 11.5px; color: #9ca3af; margin: 0; line-height: 1.5;
@@ -776,6 +925,9 @@ select.utb-field-input {
   margin: 0;
   font-size: 16px;
   color: #111827;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
 }
 .utb-request-header p {
   margin: 3px 0 0;

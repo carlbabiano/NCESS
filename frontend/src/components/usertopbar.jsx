@@ -619,11 +619,23 @@ function normalizeProfileValue(value) {
   return String(value ?? '').trim();
 }
 
+// addressProvince and permanentAddress are never edited directly by the
+// resident — they're derived/auto-filled (with DEFAULT_PROVINCE /
+// DEFAULT_BARANGAY fallbacks) from other fields purely for display and for
+// the records we save. Including them in the diff makes them flicker
+// between baseline and in-progress snapshots and get falsely flagged as
+// "requested changes" even when the resident only edited something
+// unrelated. Their real, editable sources (permanentStreet, permanentCity,
+// permanentProvince, permanentRegion, etc.) are still diffed normally, so
+// genuine permanent-address edits are still detected and submitted.
+const NON_REQUESTABLE_DERIVED_FIELDS = ['addressProvince', 'permanentAddress'];
+
 function getChangedProfileData(originalData, updatedData) {
   const original = toRequestPayload(originalData);
   const updated = toRequestPayload(updatedData);
 
   return Object.keys(updated).reduce((changes, key) => {
+    if (NON_REQUESTABLE_DERIVED_FIELDS.includes(key)) return changes;
     if (normalizeProfileValue(updated[key]) !== normalizeProfileValue(original[key])) {
       changes[key] = updated[key];
     }
@@ -633,6 +645,23 @@ function getChangedProfileData(originalData, updatedData) {
 
 function getProofRequiredFields(changedData = {}) {
   return PROFILE_PROOF_REQUIRED_FIELDS.filter(key => changedData[key] !== undefined);
+}
+
+const PERMANENT_ADDRESS_FIELDS = [
+  'permanentRegion', 'permanentProvince', 'permanentCity', 'permanentBarangay', 'permanentStreet',
+];
+
+// When the resident selects "Temporary Resident / Tenant", their permanent
+// address (back home) must be fully filled in so the barangay still has a
+// record of where they're permanently from.
+function validateRequestPermanentAddress(data) {
+  const isTemp = ['Temporary Resident', 'Temporary Resident / Tenant'].includes(data.residencyStatus);
+  if (!isTemp) return {};
+
+  return PERMANENT_ADDRESS_FIELDS.reduce((acc, key) => {
+    if (!String(data[key] || '').trim()) acc[key] = 'This field is required.';
+    return acc;
+  }, {});
 }
 
 async function uploadProfileProof(apiBase, file) {
@@ -792,6 +821,10 @@ export default function UserTopbar({
   const [requestErrors, setRequestErrors] = useState({});
   const [requestSaving, setRequestSaving] = useState(false);
   const [requestSent,   setRequestSent]   = useState(false);
+  // Pending profile-change request (blocks new requests until admin reviews it)
+  const [pendingRequest,    setPendingRequest]    = useState(null);
+  const [pendingLoading,    setPendingLoading]    = useState(false);
+  const [viewPendingOpen,   setViewPendingOpen]   = useState(false);
   // PSGC state for request panel permanent address
   const [reqPsgcRegions,   setReqPsgcRegions]   = useState([]);
   const [reqPsgcProvinces, setReqPsgcProvinces] = useState([]);
@@ -1007,6 +1040,10 @@ export default function UserTopbar({
       if (reviewedField && reviewedStatus) {
         const approved = reviewedStatus === 'approved';
         const label = PROFILE_CHANGE_LABELS[reviewedField] || reviewedField;
+        // The admin's reason/note for this field lives on the field review
+        // itself (fieldReviews[field].note); fall back to the request-level
+        // reviewNote in case a global note was left instead.
+        const reason = request?.fieldReviews?.[reviewedField]?.note || request?.reviewNote || '';
         pushNotif(setNotifs, `profile-${request._id}-${reviewedField}-${reviewedStatus}-${request.updatedAt || Date.now()}`, {
           kind: 'profile_change',
           type: reviewedStatus,
@@ -1016,6 +1053,21 @@ export default function UserTopbar({
           body: approved
             ? `${label} was approved and applied to your profile.`
             : `${label} change was denied by the barangay admin.`,
+          reason,
+        });
+      }
+
+      // Keep the resident's local copy of their change request in sync in real
+      // time. This must run even when nothing was approved (pure denial), or
+      // the resident's "Requested Profile Update" panel goes stale and the
+      // "Request Profile Update" button can incorrectly reappear before a
+      // manual refresh — so this runs before the updatedUser early return below.
+      if (request?._id) {
+        const isActive = ['pending', 'denied', 'rejected', 'partially_approved'].includes(request.status);
+        setPendingRequest(prev => {
+          // Don't clobber a newer request the resident may have since submitted.
+          if (prev && prev._id && String(prev._id) !== String(request._id)) return prev;
+          return isActive ? request : null;
         });
       }
 
@@ -1224,13 +1276,23 @@ export default function UserTopbar({
         setFormData(nextProfile);
         setRequestData(prev => (requestOpen ? prev : nextProfile));
         setRequestBirthdateDisplay(prev => (requestOpen ? prev : birthdateDisplayFromIso(nextProfile.dateOfBirth)));
+        // Seed pending/denied request state from the same call — no extra round trip needed.
+        // NOTE: once every field on a request has been reviewed, the backend
+        // clears requestedData down to {} (diffs move into fieldReviews). So
+        // "active" is decided purely by status — never by requestedData being
+        // non-empty, or a fully-denied request would vanish from view here.
+        if (!requestOpen && !viewPendingOpen) {
+          const pcr = data?.pendingChangeRequest;
+          const isActive = pcr && ['pending', 'denied', 'rejected', 'partially_approved'].includes(pcr.status);
+          setPendingRequest(isActive ? pcr : null);
+        }
       })
       .catch(() => {
         /* Keep the stored profile if the refresh fails. */
       });
 
     return () => { cancelled = true; };
-  }, [requestOpen]);
+  }, [requestOpen, viewPendingOpen]);
 
   // Close side panel on outside click
   useEffect(() => {
@@ -1383,7 +1445,7 @@ export default function UserTopbar({
     setFormData(prev => ({ ...prev, [key]: value }));
   }
 
-  function openRequestPanel() {
+  async function openRequestPanel() {
     setRequestData({ ...formData });
     setRequestBirthdateDisplay(birthdateDisplayFromIso(formData.dateOfBirth));
     setRequestNote('');
@@ -1536,6 +1598,119 @@ export default function UserTopbar({
     handleRequestFieldChange('permanentCity', selected ? getPsgcName(selected) : '');
   }
 
+  const fetchPendingRequest = useCallback(async () => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const apiBase = import.meta.env.VITE_BACKEND_URL || '';
+    if (!token || !apiBase) return;
+    setPendingLoading(true);
+    try {
+      // Reuse /user/me which already returns pendingChangeRequest — no extra route needed.
+      const res = await fetch(`${apiBase}/user/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      const pcr = data?.pendingChangeRequest;
+      const isActive = pcr && ['pending', 'denied', 'rejected', 'partially_approved'].includes(pcr.status);
+      setPendingRequest(isActive ? pcr : null);
+    } catch {
+      /* keep current state on network failure */
+    } finally {
+      setPendingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchPendingRequest(); }, [fetchPendingRequest]);
+
+  // Fields that differ between the saved profile and the pending request.
+  // Once a request is fully reviewed, requestedData is cleared to {} (the
+  // diffs live in fieldReviews instead) — so this naturally becomes empty
+  // and no fields render as "pending", which is correct.
+  const pendingChangedKeys = pendingRequest?.requestedData
+    ? Object.keys(pendingRequest.requestedData)
+    : [];
+  const isPendingField = key => pendingChangedKeys.includes(key);
+
+  // Per-field review outcome (populated once the admin has ruled on a field —
+  // survives even after requestedData is cleared, since it lives separately).
+  const fieldReviewOf = key => pendingRequest?.fieldReviews?.[key] || null;
+  const isDeniedField = key => fieldReviewOf(key)?.status === 'denied';
+  const isApprovedField = key => fieldReviewOf(key)?.status === 'approved';
+  const fieldReviewReason = key => fieldReviewOf(key)?.note || pendingRequest?.reviewNote || '';
+
+  const pendingFieldClass = key => {
+    if (!viewPendingOpen) return '';
+    if (isPendingField(key)) return ' utb-request-field--pending';
+    if (isDeniedField(key)) return ' utb-request-field--denied';
+    if (isApprovedField(key)) return ' utb-request-field--approved';
+    return '';
+  };
+
+  async function openViewPendingPanel(overrideRequest) {
+    let reqObj = overrideRequest || pendingRequest;
+
+    // If state hasn't been seeded yet (e.g. /user/me still in flight), fetch now.
+    if (!reqObj) {
+      await fetchPendingRequest();
+      // fetchPendingRequest calls setPendingRequest, but state updates are async —
+      // read directly from the API response instead of relying on stale closure.
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+      const apiBase = import.meta.env.VITE_BACKEND_URL || '';
+      try {
+        const res = await fetch(`${apiBase}/user/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          reqObj = data?.pendingChangeRequest || null;
+          const isActive = reqObj && ['pending', 'denied', 'rejected', 'partially_approved'].includes(reqObj.status);
+          if (isActive) setPendingRequest(reqObj);
+          else reqObj = null;
+        }
+      } catch { /* fall through — nothing to show */ }
+    }
+
+    if (!reqObj) return; // genuinely no active request
+    // For denied fields, requestedData no longer holds the value (it was
+    // cleared once reviewed) — pull what was actually asked for out of
+    // fieldReviews so the resident can still see what got denied, not just
+    // their unchanged current value.
+    const deniedValues = {};
+    Object.entries(reqObj.fieldReviews || {}).forEach(([key, review]) => {
+      if (review?.status === 'denied' && review.requestedValue !== undefined) {
+        deniedValues[key] = review.requestedValue;
+      }
+    });
+    const merged = { ...formData, ...deniedValues, ...(reqObj.requestedData || {}) };
+    setRequestData(merged);
+    setRequestBirthdateDisplay(birthdateDisplayFromIso(merged.dateOfBirth));
+    setRequestNote(reqObj.note || '');
+    setRequestProofFile(null);
+    setRequestStatus({ type: '', message: '' });
+    setRequestErrors({});
+    setRequestSent(false);
+    const savedRegionName = merged.permanentRegion || '';
+    const preselectedRegionCode = Object.entries(REGION_DISPLAY_NAMES)
+      .find(([, name]) => name === savedRegionName)?.[0] || '';
+    setReqRegionCode(preselectedRegionCode);
+    setReqProvinceCode('');
+    setReqPsgcProvinces([]);
+    setReqPsgcCities([]);
+    setReqPsgcError('');
+    setViewPendingOpen(true);
+  }
+
+  function closeViewPendingPanel() {
+    setViewPendingOpen(false);
+    setRequestStatus({ type: '', message: '' });
+    setRequestErrors({});
+  }
+
+  // Resident acknowledges a resolved (denied / partially approved) request
+  // and starts a fresh one, pre-filled from their current saved profile.
+  function submitAnotherRequest() {
+    closeViewPendingPanel();
+    openRequestPanel();
+  }
+
   async function submitInformationRequest() {
     const birthdateError = validateRequestBirthdate(requestData.dateOfBirth, requestBirthdateDisplay);
     if (birthdateError) {
@@ -1547,6 +1722,13 @@ export default function UserTopbar({
     const changedData = getChangedProfileData(profileBaseline, requestData);
     if (Object.keys(changedData).length === 0) {
       setRequestStatus({ type: 'error', message: 'Please change something before sending a request.' });
+      return;
+    }
+
+    const addressErrors = validateRequestPermanentAddress(requestData);
+    if (Object.keys(addressErrors).length > 0) {
+      setRequestErrors(addressErrors);
+      setRequestStatus({ type: 'error', message: 'Please complete all permanent address fields before submitting.' });
       return;
     }
 
@@ -1585,9 +1767,27 @@ export default function UserTopbar({
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || 'Failed to submit request.');
+      if (!res.ok) {
+        if (res.status === 409) {
+          // Resident already has a pending request — surface it instead of
+          // leaving them stuck on a "failed" message.
+          setRequestSaving(false);
+          setRequestOpen(false);
+          if (data?.request?.requestedData) {
+            setPendingRequest(data.request);
+            openViewPendingPanel(data.request);
+          } else {
+            await fetchPendingRequest();
+          }
+          return;
+        }
+        throw new Error(data.message || 'Failed to submit request.');
+      }
       setRequestStatus({ type: '', message: '' });
       setRequestSent(true);
+      const created = data?.request || data;
+      setPendingRequest(created && created.requestedData ? created : { requestedData: changedData, note: requestNote });
+      fetchPendingRequest();
     } catch (err) {
       setRequestStatus({ type: 'error', message: err.message || 'Failed to submit request.' });
     } finally {
@@ -1636,6 +1836,20 @@ export default function UserTopbar({
   const requestPreviewChanges = getChangedProfileData(profileBaseline, requestData);
   const requestProofFields = getProofRequiredFields(requestPreviewChanges);
   const requestNeedsProof = requestProofFields.length > 0;
+
+  // Status pill + copy shown at the top of the "Requested Profile Update" view panel
+  const pendingRequestStatus = pendingRequest?.status || 'pending';
+  const pendingRequestStatusInfo =
+    pendingRequestStatus === 'denied' || pendingRequestStatus === 'rejected'
+      ? { tone: 'denied', label: 'Denied' }
+      : pendingRequestStatus === 'partially_approved'
+        ? { tone: 'partial', label: 'Partially Approved' }
+        : pendingRequestStatus === 'approved'
+          ? { tone: 'approved', label: 'Approved' }
+          : { tone: 'pending', label: 'Pending Review' };
+  // Admin can resolve individual fields; once resolved (not just "pending"),
+  // the resident should be able to acknowledge and start a new request.
+  const canSubmitAnotherRequest = ['denied', 'rejected', 'partially_approved'].includes(pendingRequestStatus);
 
   // Age calc for request panel (derived from requestData.dateOfBirth)
   const requestAge = (() => {
@@ -1885,6 +2099,9 @@ export default function UserTopbar({
                       </div>
                       <p className="utb-notif-title">{n.title}</p>
                       <p className="utb-notif-sub">{n.body}</p>
+                      {n.reason && (
+                        <p className="utb-notif-note">"{n.reason}"</p>
+                      )}
                     </div>
                   </button>
                 );
@@ -2168,13 +2385,29 @@ export default function UserTopbar({
 
                 {/* Footer */}
                 <div className="utb-modal-footer">
-                  <button className="utb-request-btn" type="button" onClick={openRequestPanel}>
+                  {pendingRequest && (
+                    <button className="utb-view-pending-btn" type="button" onClick={() => openViewPendingPanel()}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                      View Requested Profile Update
+                    </button>
+                  )}
+                  {!pendingRequest && (
+                  <button
+                    className="utb-request-btn"
+                    type="button"
+                    onClick={openRequestPanel}
+                    disabled={pendingLoading}
+                  >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
                       <path d="M12 20h9"/>
                       <path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/>
                     </svg>
-                    Request Information Change
+                    Request Profile Update
                   </button>
+                  )}
 
                   {activeSection > 0 && (
                     <button className="utb-back-btn" onClick={() => setActiveSection(s => s - 1)}>
@@ -2223,10 +2456,10 @@ export default function UserTopbar({
           </div>
         </div>
       )}
-      {requestOpen && (
+      {(requestOpen || viewPendingOpen) && (
         <div
           className="utb-request-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) (requestSent ? closeRequestSuccess() : closeRequestPanel()); }}
+          onClick={(e) => { if (e.target === e.currentTarget) (requestSent ? closeRequestSuccess() : viewPendingOpen ? closeViewPendingPanel() : closeRequestPanel()); }}
         >
           {requestSent ? (
             <div className="utb-request-success-panel" role="dialog" aria-modal="true" aria-label="Request Sent">
@@ -2245,18 +2478,60 @@ export default function UserTopbar({
               <button className="utb-save-btn" type="button" onClick={closeRequestSuccess}>Close</button>
             </div>
           ) : (
-          <div className="utb-request-panel" role="dialog" aria-modal="true" aria-label="Request Information Change">
+          <div className={`utb-request-panel${viewPendingOpen ? ' utb-request-panel--viewonly' : ''}`} role="dialog" aria-modal="true" aria-label={viewPendingOpen ? 'Requested Profile Update' : 'Request Profile Update'}>
             <div className="utb-request-header">
               <div>
-                <h2>Request Information Change</h2>
-                <p>These edits will be reviewed by the barangay admin before your profile is updated.</p>
+                <h2>
+                  {viewPendingOpen ? 'Requested Profile Update' : 'Request Profile Update'}
+                  {viewPendingOpen && (
+                    <span className={`utb-status-badge utb-status-badge--${pendingRequestStatusInfo.tone}`}>
+                      {pendingRequestStatusInfo.label}
+                    </span>
+                  )}
+                </h2>
+                <p>
+                  {viewPendingOpen
+                    ? pendingRequestStatus === 'denied' || pendingRequestStatus === 'rejected'
+                      ? 'This request was denied by the admin. See the note below.'
+                      : pendingRequestStatus === 'partially_approved'
+                        ? 'Some changes were approved and applied to your profile. Others were denied — see the notes below.'
+                        : 'This request is pending review. Highlighted fields show what you asked to change.'
+                    : 'These edits will be reviewed by the barangay admin before your profile is updated.'}
+                </p>
               </div>
-              <button className="utb-modal-close" onClick={closeRequestPanel} aria-label="Close request panel">
+              <button className="utb-modal-close" onClick={viewPendingOpen ? closeViewPendingPanel : closeRequestPanel} aria-label="Close request panel">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
             </div>
+
+            {/* Denial / partial-approval notice banner */}
+            {viewPendingOpen && (pendingRequestStatus === 'denied' || pendingRequestStatus === 'rejected' || pendingRequestStatus === 'partially_approved') && (
+              <div className={pendingRequestStatus === 'partially_approved' ? 'utb-partial-banner' : 'utb-denial-banner'}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" style={{ flexShrink: 0, marginTop: 1 }}>
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <div>
+                  <strong>{pendingRequestStatus === 'partially_approved' ? 'Partially Approved' : 'Request Denied'}</strong>
+                  {pendingRequest?.reviewNote || pendingRequest?.fieldReviews
+                    ? (() => {
+                        // Collect all per-field denial notes
+                        const notes = Object.entries(pendingRequest.fieldReviews || {})
+                          .filter(([, r]) => r?.status === 'denied' && r?.note)
+                          .map(([key, r]) => `${PROFILE_CHANGE_LABELS[key] || key}: ${r.note}`);
+                        const globalNote = pendingRequest.reviewNote || '';
+                        const allNotes = [...(globalNote ? [globalNote] : []), ...notes];
+                        return allNotes.length > 0
+                          ? <ul className="utb-denial-notes">{allNotes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+                          : null;
+                      })()
+                    : null}
+                </div>
+              </div>
+            )}
 
             <div className="utb-request-body">
               {SECTIONS.map(section => (
@@ -2458,8 +2733,13 @@ export default function UserTopbar({
                         !(section.label === 'Home & Residency' && ['houseNo', 'street', 'purok'].includes(field.key))
                       )
                       .map(field => (
-                        <label className="utb-request-field" key={field.key}>
-                          <span>{field.label}</span>
+                        <label className={`utb-request-field${pendingFieldClass(field.key)}`} key={field.key}>
+                          <span>
+                            {field.label}
+                            {viewPendingOpen && isPendingField(field.key) && <em className="utb-pending-badge">Pending</em>}
+                            {viewPendingOpen && isDeniedField(field.key) && <em className="utb-pending-badge utb-pending-badge--denied">Denied</em>}
+                            {viewPendingOpen && isApprovedField(field.key) && <em className="utb-pending-badge utb-pending-badge--approved">Approved</em>}
+                          </span>
                           {field.key === 'dateOfBirth' ? (
                             <>
                               <div className="utb-date-input-wrap">
@@ -2471,6 +2751,7 @@ export default function UserTopbar({
                                   onChange={handleRequestBirthdateTextChange}
                                   onKeyDown={handleRequestBirthdateKeyDown}
                                   className={`utb-request-date-input${requestErrors.dateOfBirth ? ' utb-input--error' : ''}`}
+                                  readOnly={viewPendingOpen}
                                 />
                                 <input
                                   type="date"
@@ -2493,6 +2774,9 @@ export default function UserTopbar({
                               )}
                             </>
                           ) : field.key === 'suffix' ? (
+                            viewPendingOpen ? (
+                              <input type="text" value={requestData.suffix || '—'} readOnly />
+                            ) : (
                             <select
                               value={requestData.suffix || ''}
                               onChange={e => handleRequestFieldChange('suffix', e.target.value)}
@@ -2500,12 +2784,22 @@ export default function UserTopbar({
                               <option value="">None</option>
                               {SUFFIXES.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
+                            )
                           ) : (
+                            viewPendingOpen && field.options ? (
+                              // In view-only mode always show a plain text input so the
+                              // saved value (e.g. "Single") is never replaced by "Select..."
+                              <input type="text" value={requestData[field.key] || '—'} readOnly />
+                            ) : (
                             <FieldControl
                               field={{ ...field, type: field.type || 'text' }}
                               value={requestData[field.key] || ''}
                               onChange={value => handleRequestFieldChange(field.key, value)}
                             />
+                            )
+                          )}
+                          {viewPendingOpen && isDeniedField(field.key) && fieldReviewReason(field.key) && (
+                            <p className="utb-field-denial-reason">{fieldReviewReason(field.key)}</p>
                           )}
                         </label>
                       ))
@@ -2532,45 +2826,77 @@ export default function UserTopbar({
               <label className="utb-request-field utb-request-field--note">
                 <span>Reason or note for admin</span>
                 <textarea
-                  value={requestNote}
+                  value={viewPendingOpen ? (pendingRequest?.note || '') : requestNote}
                   onChange={e => setRequestNote(e.target.value)}
                   placeholder="Optional"
                   rows={3}
+                  readOnly={viewPendingOpen}
                 />
               </label>
 
-              {requestNeedsProof && (
+              {(viewPendingOpen ? !!(pendingRequest?.proofDocumentUrl || pendingRequest?.proofDocumentName) : requestNeedsProof) && (
                 <div className="utb-proof-box">
                   <div className="utb-proof-box__copy">
-                    <span>Valid ID / Proof Required</span>
-                    <p>
-                      Upload a valid ID or supporting document for {requestProofFields.map(key => PROFILE_CHANGE_LABELS[key] || key).join(', ')}.
-                    </p>
+                    <span>{viewPendingOpen ? 'Valid ID / Proof Submitted' : 'Valid ID / Proof Required'}</span>
+                    {!viewPendingOpen && (
+                      <p>
+                        Upload a valid ID or supporting document for {requestProofFields.map(key => PROFILE_CHANGE_LABELS[key] || key).join(', ')}.
+                      </p>
+                    )}
                   </div>
-                  <label className="utb-proof-upload">
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={e => setRequestProofFile(e.target.files?.[0] || null)}
-                    />
-                    <span>{requestProofFile ? requestProofFile.name : 'Choose document'}</span>
-                  </label>
+                  {viewPendingOpen ? (
+                    pendingRequest?.proofDocumentUrl ? (
+                      <a className="utb-proof-upload" href={pendingRequest.proofDocumentUrl} target="_blank" rel="noreferrer">
+                        <span>{pendingRequest.proofDocumentName || 'View document'}</span>
+                      </a>
+                    ) : (
+                      <span className="utb-proof-upload">
+                        <span>{pendingRequest?.proofDocumentName || 'Document on file'}</span>
+                      </span>
+                    )
+                  ) : (
+                    <label className="utb-proof-upload">
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={e => setRequestProofFile(e.target.files?.[0] || null)}
+                      />
+                      <span>{requestProofFile ? requestProofFile.name : 'Choose document'}</span>
+                    </label>
+                  )}
                 </div>
               )}
 
             </div>
 
             <div className="utb-request-footer">
-              {requestStatus.message && (
+              {!viewPendingOpen && requestStatus.message && (
                 <div className={`utb-request-message utb-request-message--${requestStatus.type}`}>
                   {requestStatus.message}
                 </div>
               )}
               <div className="utb-request-actions">
-                <button className="utb-back-btn" type="button" onClick={closeRequestPanel}>Cancel</button>
-                <button className="utb-save-btn" type="button" onClick={submitInformationRequest} disabled={requestSaving}>
-                  {requestSaving ? 'Sending...' : 'Send Request'}
-                </button>
+                {viewPendingOpen ? (
+                  <>
+                    {canSubmitAnotherRequest && (
+                      <button className="utb-request-btn" type="button" onClick={submitAnotherRequest}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                          <path d="M12 20h9"/>
+                          <path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                        </svg>
+                        Submit Another Request
+                      </button>
+                    )}
+                    <button className="utb-save-btn" type="button" onClick={closeViewPendingPanel}>Close</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="utb-back-btn" type="button" onClick={closeRequestPanel}>Cancel</button>
+                    <button className="utb-save-btn" type="button" onClick={submitInformationRequest} disabled={requestSaving}>
+                      {requestSaving ? 'Sending...' : 'Send Request'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

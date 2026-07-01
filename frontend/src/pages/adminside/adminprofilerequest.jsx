@@ -10,6 +10,7 @@ const CHANGE_LABELS = {
   firstName: 'First Name',
   middleName: 'Middle Name',
   lastName: 'Last Name',
+  suffix: 'Suffix',
   birthdate: 'Date of Birth',
   sex: 'Sex',
   civilStatus: 'Civil Status',
@@ -18,7 +19,18 @@ const CHANGE_LABELS = {
   email: 'Email Address',
   homeAddress: 'Home Address',
   purok: 'Purok',
-  residencyStatus: 'Residency Status',
+  residencyStatus: 'Residency Type',
+  residentType: 'Resident Type',
+  addressBarangay: 'Present Barangay',
+  addressCity: 'Present City / Municipality',
+  addressProvince: 'Present Province',
+  addressRegion: 'Present Region',
+  permanentAddress: 'Permanent Address',
+  permanentStreet: 'Permanent House No./Street',
+  permanentBarangay: 'Permanent Barangay',
+  permanentCity: 'Permanent City / Municipality',
+  permanentProvince: 'Permanent Province',
+  permanentRegion: 'Permanent Region',
   lengthOfStay: 'Length of Stay',
   voterStatus: 'Voter Status',
   householdId: 'Household / Family ID',
@@ -73,22 +85,192 @@ function loadingKey(requestId, field, status) {
   return `${requestId}:${field}:${status}`;
 }
 
-function RequestModal({ request, onClose, onReview, actionLoading, canEdit }) {
+const DENY_REASONS = [
+  'Information does not match the uploaded ID.',
+  'Invalid or incomplete supporting document.',
+  'Please review and correct the submitted information.',
+  'Proof of residency could not be verified.',
+  'Other...',
+];
+
+// ── Sections mirroring the resident's "Request Information Change" form ────
+const PROFILE_SECTIONS = [
+  {
+    label: 'Personal Information',
+    fields: [
+      { key: 'firstName',   label: 'First Name' },
+      { key: 'middleName',  label: 'Middle Name' },
+      { key: 'lastName',    label: 'Last Name' },
+      { key: 'suffix',      label: 'Suffix' },
+      { key: 'birthdate',   label: 'Date of Birth', isDate: true },
+      { key: 'sex',         label: 'Sex' },
+      { key: 'civilStatus', label: 'Civil Status' },
+      { key: 'nationality', label: 'Nationality' },
+    ],
+  },
+  {
+    label: 'Home & Residency',
+    fields: [
+      { key: 'residencyStatus',   label: 'Residency Type', full: true },
+      { key: 'homeAddress',       label: 'House No./Street/Building No.', full: true },
+      { key: 'purok',             label: 'Purok' },
+      { key: 'householdId',       label: 'Household / Family ID' },
+      { key: 'lengthOfStay',      label: 'Length of Stay' },
+      { key: 'permanentRegion',   label: 'Permanent Region' },
+      { key: 'permanentProvince', label: 'Permanent Province' },
+      { key: 'permanentCity',     label: 'Permanent City / Municipality' },
+      { key: 'permanentBarangay', label: 'Permanent Barangay' },
+      { key: 'permanentStreet',   label: 'Permanent House No./Street', full: true },
+    ],
+  },
+  {
+    label: 'Contact Information',
+    fields: [
+      { key: 'contactNumber', label: 'Mobile Number' },
+      { key: 'email',         label: 'Email Address' },
+    ],
+  },
+  {
+    label: 'Additional Information',
+    fields: [
+      { key: 'occupation',              label: 'Occupation' },
+      { key: 'voterStatus',             label: 'Voter Status' },
+      { key: 'educationalAttainment',   label: 'Educational Attainment' },
+      { key: 'emergencyContactName',    label: 'Emergency Contact Name' },
+      { key: 'emergencyContactNumber',  label: 'Emergency Contact Number' },
+    ],
+  },
+];
+
+function ProfileFormField({ field, currentData, requestedData, mode, selected, selectable, onToggle }) {
+  const currentRaw = currentData?.[field.key];
+  const requestedRaw = requestedData?.[field.key];
+  const isChanged = requestedRaw !== undefined;
+
+  const currentVal = valueText(currentRaw);
+  const displayCurrent = field.isDate ? formatDate(currentRaw) : currentVal;
+  const displayRequested = field.isDate ? formatDate(requestedRaw) : valueText(requestedRaw);
+  const hadPreviousValue = isChanged && currentVal !== '-';
+
+  let boxClass = 'apr-ff__box apr-ff__box--readonly';
+  if (isChanged && !selected) boxClass += ' apr-ff__box--flagged';
+  if (isChanged && selectable) boxClass += ' apr-ff__box--selectable';
+  if (isChanged && selected) {
+    boxClass += mode === 'deny' ? ' apr-ff__box--deny-selected' : ' apr-ff__box--approve-selected';
+  }
+
+  return (
+    <div className={`apr-ff${field.full ? ' apr-ff--full' : ''}`}>
+      <span className="apr-ff__label">
+        {field.label}
+        {isChanged && (
+          <span className="apr-ff__changed-tag">
+            {selected ? (mode === 'deny' ? 'Marked deny' : 'Marked approve') : 'Requested change'}
+          </span>
+        )}
+      </span>
+      <div
+        className={boxClass}
+        role={isChanged && selectable ? 'button' : undefined}
+        tabIndex={isChanged && selectable ? 0 : undefined}
+        onClick={isChanged && selectable ? () => onToggle(field.key) : undefined}
+        onKeyDown={isChanged && selectable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(field.key); } } : undefined}
+      >
+        {isChanged ? (
+          <span className="apr-ff__box-content">
+            {hadPreviousValue && <span className="apr-ff__box-old">{displayCurrent}</span>}
+            <span className="apr-ff__box-new">{displayRequested}</span>
+          </span>
+        ) : displayCurrent}
+      </div>
+    </div>
+  );
+}
+
+
+
+function RequestModal({ request, onClose, onBulkReview, actionLoading, canEdit }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [mode, setMode] = useState(null); // null | 'approve' | 'deny'
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const [denyPanelOpen, setDenyPanelOpen] = useState(false);
+  const [denyReason, setDenyReason] = useState('');
+  const [denyOtherText, setDenyOtherText] = useState('');
 
   useEffect(() => {
     setPreviewOpen(false);
+    setMode(null);
+    setSelectedKeys([]);
+    setDenyPanelOpen(false);
+    setDenyReason('');
+    setDenyOtherText('');
   }, [request?._id]);
 
   if (!request) return null;
-  const rows = Object.keys(request.requestedData || {});
   const proofLabel = proofDocumentLabel(request);
   const proofIsImage = isImageProofDocument(request);
+  const changedKeys = Object.keys(request.requestedData || {});
+  const isBusy = !!actionLoading;
+  const hasSelection = selectedKeys.length > 0;
 
   function closeModal() {
     setPreviewOpen(false);
     onClose();
   }
+
+  function resetWorkflow() {
+    setMode(null);
+    setSelectedKeys([]);
+    setDenyPanelOpen(false);
+    setDenyReason('');
+    setDenyOtherText('');
+  }
+
+  function selectMode(nextMode) {
+    if (mode === nextMode) {
+      resetWorkflow();
+      return;
+    }
+    setMode(nextMode);
+    setSelectedKeys([]);
+    setDenyPanelOpen(false);
+    setDenyReason('');
+    setDenyOtherText('');
+  }
+
+  function toggleKey(key) {
+    setSelectedKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  }
+
+  function handleDone() {
+    if (!hasSelection) return;
+    if (mode === 'approve') {
+      onBulkReview(request._id, selectedKeys, 'approved');
+      resetWorkflow();
+    } else if (mode === 'deny') {
+      setDenyPanelOpen(true);
+    }
+  }
+
+  function cancelDenyPanel() {
+    setDenyPanelOpen(false);
+    setDenyReason('');
+    setDenyOtherText('');
+  }
+
+  function confirmDenySelected() {
+    if (!hasSelection || !denyReason) return;
+    const note = denyReason === 'Other...' ? denyOtherText.trim() : denyReason;
+    if (denyReason === 'Other...' && !note) return;
+    onBulkReview(request._id, selectedKeys, 'rejected', note);
+    resetWorkflow();
+  }
+
+  const actionMessage = !mode
+    ? 'Choose an action: Approve or Deny.'
+    : mode === 'approve'
+      ? 'Select one or more requested changes to approve.'
+      : 'Select one or more requested changes to deny.';
 
   return (
     <div className="apr-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
@@ -105,62 +287,140 @@ function RequestModal({ request, onClose, onReview, actionLoading, canEdit }) {
           </button>
         </div>
 
-        <div className="apr-modal__body">
-          {request.note && <p className="apr-note">{request.note}</p>}
-          {request.proofDocumentUrl && (
-            <div className="apr-proof">
-              <div>
-                <span>Valid ID / Proof Document</span>
-                <p>{proofLabel}</p>
+        {canEdit && changedKeys.length > 0 && denyPanelOpen && (
+          <div className="apr-toolbar">
+              <div className="apr-deny-panel">
+                <label className="apr-deny-panel__label">
+                  Reason for denial ({selectedKeys.length} field{selectedKeys.length === 1 ? '' : 's'})
+                </label>
+                <select
+                  className="apr-deny-panel__select"
+                  value={denyReason}
+                  onChange={e => setDenyReason(e.target.value)}
+                >
+                  <option value="">Please select...</option>
+                  {DENY_REASONS.map(reason => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))}
+                </select>
+
+                {denyReason === 'Other...' && (
+                  <textarea
+                    className="apr-deny-panel__textarea"
+                    value={denyOtherText}
+                    onChange={e => setDenyOtherText(e.target.value)}
+                    placeholder="Describe the reason for denial"
+                    rows={3}
+                  />
+                )}
+
+                <div className="apr-deny-panel__actions">
+                  <button
+                    className="apr-btn apr-btn--ghost apr-btn--compact"
+                    type="button"
+                    onClick={cancelDenyPanel}
+                  >
+                    Back
+                  </button>
+                  <button
+                    className="apr-btn apr-btn--danger apr-btn--compact"
+                    type="button"
+                    onClick={confirmDenySelected}
+                    disabled={isBusy || !denyReason || (denyReason === 'Other...' && !denyOtherText.trim())}
+                  >
+                    {isBusy ? 'Denying...' : 'Confirm Deny'}
+                  </button>
+                </div>
               </div>
-              <button type="button" onClick={() => setPreviewOpen(true)}>
-                View Document
-              </button>
+          </div>
+        )}
+
+        <div className="apr-modal__body apr-modal__body--form">
+          {request.note && (
+            <div className="apr-ff-note">
+              <span>Note from resident</span>
+              <p>{request.note}</p>
             </div>
           )}
-          <div className="apr-change-list">
-            <div className="apr-change-list__head">
-              <span>Information</span>
-              <span>Previous Information</span>
-              <span>Requested Change</span>
-              {canEdit && <span>Decision</span>}
-            </div>
-            {rows.map(key => (
-              <div className="apr-change-row" key={key}>
-                <span className="apr-change-row__label">{CHANGE_LABELS[key] || key}</span>
-                <div className="apr-change-row__value apr-change-row__value--old">
-                  <p>{valueText(request.currentData?.[key])}</p>
-                </div>
-                <div className="apr-change-row__value apr-change-row__value--new">
-                  <p>{valueText(request.requestedData?.[key])}</p>
-                </div>
-                {canEdit && (
-                  <div className="apr-change-row__actions">
-                    <button
-                      className="apr-btn apr-btn--danger apr-btn--compact"
-                      type="button"
-                      onClick={() => onReview(request._id, key, 'rejected')}
-                      disabled={!!actionLoading}
-                    >
-                      {actionLoading === loadingKey(request._id, key, 'rejected') ? 'Denying...' : 'Deny'}
-                    </button>
-                    <button
-                      className="apr-btn apr-btn--primary apr-btn--compact"
-                      type="button"
-                      onClick={() => onReview(request._id, key, 'approved')}
-                      disabled={!!actionLoading}
-                    >
-                      {actionLoading === loadingKey(request._id, key, 'approved') ? 'Applying...' : 'Approve & Apply'}
-                    </button>
-                  </div>
-                )}
+
+          {PROFILE_SECTIONS.map(section => (
+            <section className="apr-ff-section" key={section.label}>
+              <div className="apr-ff-section__title">
+                <h3>{section.label}</h3>
               </div>
-            ))}
-          </div>
+              <div className="apr-ff-grid">
+                {section.fields.map(field => (
+                  <ProfileFormField
+                    key={field.key}
+                    field={field}
+                    currentData={request.currentData}
+                    requestedData={request.requestedData}
+                    mode={mode}
+                    selected={selectedKeys.includes(field.key)}
+                    selectable={canEdit && !!mode && !denyPanelOpen}
+                    onToggle={toggleKey}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
 
         <div className="apr-modal__footer">
-          <button className="apr-btn apr-btn--ghost" type="button" onClick={closeModal}>Close</button>
+          {request.proofDocumentUrl ? (
+            <button className="apr-proof-link-btn" type="button" onClick={() => setPreviewOpen(true)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              Valid ID / Proof Document
+            </button>
+          ) : <span />}
+
+          <div className="apr-modal__footer-right">
+            {canEdit && changedKeys.length > 0 && !denyPanelOpen && (
+              <div className="apr-footer-actions">
+                <p className="apr-footer-actions__message">
+                  {actionMessage}
+                  {hasSelection && (
+                    <button
+                      className="apr-unselect-all-btn"
+                      type="button"
+                      onClick={() => setSelectedKeys([])}
+                      disabled={isBusy}
+                    >
+                      Unselect All
+                    </button>
+                  )}
+                </p>
+                <div className="apr-footer-actions__buttons">
+                  <button
+                    className={`apr-btn apr-btn--success${mode === 'approve' ? ' is-active' : ''}`}
+                    type="button"
+                    onClick={() => {
+                      if (mode === 'approve' && hasSelection) handleDone();
+                      else selectMode('approve');
+                    }}
+                    disabled={isBusy}
+                  >
+                    {isBusy && mode === 'approve' ? 'Applying...' : mode === 'approve' && hasSelection ? `Finish (${selectedKeys.length})` : 'Approve'}
+                  </button>
+                  <button
+                    className={`apr-btn apr-btn--danger${mode === 'deny' ? ' is-active' : ''}`}
+                    type="button"
+                    onClick={() => {
+                      if (mode === 'deny' && hasSelection) handleDone();
+                      else selectMode('deny');
+                    }}
+                    disabled={isBusy}
+                  >
+                    {mode === 'deny' && hasSelection ? `Finish (${selectedKeys.length})` : 'Deny'}
+                  </button>
+                </div>
+              </div>
+            )}
+            <button className="apr-btn apr-btn--ghost" type="button" onClick={closeModal}>Close</button>
+          </div>
         </div>
       </div>
 
@@ -272,19 +532,27 @@ export default function AdminProfileRequest() {
     setTimeout(() => setToast(''), 3500);
   }
 
-  async function reviewRequest(requestId, field, status) {
-    setActionLoading(loadingKey(requestId, field, status));
+  async function bulkReviewRequest(requestId, fields, status, note) {
+    if (!fields || fields.length === 0) return;
+    setActionLoading(loadingKey(requestId, fields.join(','), status));
     try {
-      const res = await fetch(`${API_URL}/profile-change-requests/${requestId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAdminToken()}` },
-        body: JSON.stringify({ status, field }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || 'Action failed.');
-      setSelected(data.request?.status === 'pending' ? data.request : null);
-      const label = CHANGE_LABELS[field] || field;
-      showToast(status === 'approved' ? `${label} approved and applied.` : `${label} denied.`);
+      for (const field of fields) {
+        const res = await fetch(`${API_URL}/profile-change-requests/${requestId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAdminToken()}` },
+          body: JSON.stringify({ status, field, ...(note ? { reviewNote: note } : {}) }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || `Failed to update ${CHANGE_LABELS[field] || field}.`);
+        setSelected(data.request?.status === 'pending' ? data.request : null);
+      }
+      const count = fields.length;
+      const fieldWord = count === 1 ? 'field' : 'fields';
+      showToast(
+        status === 'approved'
+          ? `${count} ${fieldWord} approved and applied.`
+          : `${count} ${fieldWord} denied.`
+      );
       await fetchRequests();
     } catch (err) {
       showToast(err.message || 'Action failed. Please try again.');
@@ -380,7 +648,7 @@ export default function AdminProfileRequest() {
       <RequestModal
         request={selected}
         onClose={() => setSelected(null)}
-        onReview={reviewRequest}
+        onBulkReview={bulkReviewRequest}
         actionLoading={actionLoading}
         canEdit={canEdit}
       />

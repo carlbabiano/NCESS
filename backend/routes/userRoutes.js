@@ -67,6 +67,7 @@ const profileChangeRequestSchema = new mongoose.Schema({
   proofDocumentUrl: { type: String, default: '' },
   proofDocumentName: { type: String, default: '' },
   note:          { type: String, default: '' },
+  reviewNote:    { type: String, default: '' },
   status:        { type: String, enum: ['pending', 'approved', 'denied', 'rejected', 'partially_approved'], default: 'pending' },
   reviewedBy:    { type: Object, default: null },
   reviewedAt:    { type: Date, default: null },
@@ -972,7 +973,15 @@ router.get("/user/me", requireUser, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.status(200).json({ user: safeUser(user) });
+
+    // Return the most recent pending OR denied request so the user can always
+    // view their last submission (including any denial notes from the admin).
+    const activeChangeRequest = await ProfileChangeRequest.findOne({
+      userId: user._id,
+      status: { $in: ['pending', 'denied', 'rejected', 'partially_approved'] },
+    }).sort({ createdAt: -1 }).lean();
+
+    res.status(200).json({ user: safeUser(user), pendingChangeRequest: activeChangeRequest || null });
   } catch (error) {
     console.error("Fetch user profile error:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -1098,12 +1107,12 @@ router.post("/profile-change-requests", requireUser, async (req, res) => {
 
     const existing = await ProfileChangeRequest.findOne({ userId: user._id, status: 'pending' });
     if (existing)
-      return res.status(409).json({ message: 'You already have a pending information change request.' });
+      return res.status(409).json({ message: 'You already have a pending information change request.', request: existing });
 
-    const currentData = Object.keys(requestedData).reduce((acc, key) => {
-      acc[key] = currentProfileData[key] ?? '';
-      return acc;
-    }, {});
+    // Store the resident's FULL current profile (not just the fields being
+    // changed) so the admin review screen can render every field, with only
+    // the requested ones flagged as "changed".
+    const currentData = currentProfileData;
 
     const request = await ProfileChangeRequest.create({
       userId: user._id,
@@ -1124,12 +1133,50 @@ router.post("/profile-change-requests", requireUser, async (req, res) => {
   }
 });
 
+// Must be declared BEFORE the admin-only GET "/profile-change-requests" route
+// below — Express matches routes in order, and "/mine" would otherwise never
+// be reached if a more generic pattern came first. (It doesn't here, but
+// keeping this comment so the ordering stays intentional if the file is edited.)
+router.get("/profile-change-requests/mine", requireUser, async (req, res) => {
+  try {
+    const statusParam = req.query.status;
+    const filter = !statusParam || statusParam === 'all'
+      ? { userId: req.user.id, status: { $in: ['pending', 'denied', 'rejected', 'partially_approved'] } }
+      : { userId: req.user.id, status: statusParam };
+
+    const request = await ProfileChangeRequest.findOne(filter).sort({ createdAt: -1 }).lean();
+    res.status(200).json({ request: request || null });
+  } catch (err) {
+    console.error('Get my profile change request error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.get("/profile-change-requests", requireAdmin, async (req, res) => {
   try {
     const status = req.query.status || 'pending';
     const filter = status === 'all' ? {} : { status };
-    const requests = await ProfileChangeRequest.find(filter).sort({ createdAt: -1 }).lean();
-    res.status(200).json(requests);
+    const requests = await ProfileChangeRequest.find(filter)
+      .sort({ createdAt: -1 })
+      .populate('userId', PROFILE_CHANGE_FIELDS.join(' '))
+      .lean();
+
+    // Older requests (created before currentData stored the full profile)
+    // only have entries for the changed fields. Backfill any missing fields
+    // from the resident's live profile so the admin form always has data
+    // to display, while still preferring the stored snapshot when present.
+    const enriched = requests.map(request => {
+      const liveProfile = request.userId && typeof request.userId === 'object'
+        ? pickProfileFields(request.userId)
+        : {};
+      return {
+        ...request,
+        currentData: { ...liveProfile, ...(request.currentData || {}) },
+        userId: request.userId?._id || request.userId,
+      };
+    });
+
+    res.status(200).json(enriched);
   } catch (err) {
     console.error('Get profile change requests error:', err);
     res.status(500).json({ message: 'Internal server error' });
@@ -1139,6 +1186,7 @@ router.get("/profile-change-requests", requireAdmin, async (req, res) => {
 router.patch("/profile-change-requests/:id", requireAdmin, async (req, res) => {
   const { field } = req.body;
   const status = normalizeProfileReviewStatus(req.body.status);
+  const reviewNote = String(req.body.reviewNote || '').trim();
   if (!['approved', 'denied'].includes(status))
     return res.status(400).json({ message: 'Invalid request status.' });
 
@@ -1178,6 +1226,7 @@ router.patch("/profile-change-requests/:id", requireAdmin, async (req, res) => {
         ...(request.fieldReviews || {}),
         [field]: {
           status,
+          note: reviewNote,
           currentValue: currentData[field] ?? '',
           requestedValue: status === 'approved' && appliedFields[field] !== undefined
             ? appliedFields[field]
@@ -1219,6 +1268,7 @@ router.patch("/profile-change-requests/:id", requireAdmin, async (req, res) => {
       Object.keys(request.requestedData || {}).forEach(key => {
         existingReviews[key] = {
           status,
+          note: reviewNote,
           currentValue: request.currentData?.[key] ?? '',
           requestedValue: status === 'approved' && appliedFields[key] !== undefined
             ? appliedFields[key]
@@ -1234,6 +1284,7 @@ router.patch("/profile-change-requests/:id", requireAdmin, async (req, res) => {
       request.status = status;
       request.reviewedAt = now;
       request.reviewedBy = reviewer;
+      if (reviewNote) request.reviewNote = reviewNote;
       request.markModified('fieldReviews');
       request.markModified('requestedData');
       request.markModified('currentData');
