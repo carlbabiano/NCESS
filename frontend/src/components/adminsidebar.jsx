@@ -14,8 +14,9 @@ import {
   QrCode,
   ChevronDown,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import newcablogo from '../assets/newcab.png';
 import './adminsidebar.css';
 
@@ -55,6 +56,41 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
   const adminRole = getAdminRole();
   const canManageAdmins = SUPER_ADMIN_ROLES.includes(adminRole);
   const canViewRestrictedSections = canManageAdmins;
+
+  // ── Barangay Support unread badge (sidebar-only, independent of the topbar bell) ──
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const token =
+      localStorage.getItem('admin_token') ||
+      sessionStorage.getItem('admin_token') || '';
+    if (!token) return;
+
+    const fetchSupportUnread = () => {
+      fetch(`${API_URL}/chat/admin/conversations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : [])
+        .then(convs => {
+          const total = Array.isArray(convs)
+            ? convs.reduce((sum, c) => sum + (c.unreadAdmin || 0), 0)
+            : 0;
+          setSupportUnreadCount(total);
+        })
+        .catch(() => {});
+    };
+
+    fetchSupportUnread();
+
+    const socket = io(
+      import.meta.env.VITE_SOCKET_URL ||
+      import.meta.env.VITE_BACKEND_URL?.replace('/api', '') || '',
+      { auth: { token }, transports: ['websocket'], reconnection: true }
+    );
+    socket.on('conversation_updated', fetchSupportUnread);
+
+    return () => socket.disconnect();
+  }, []);
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard',        path: '/admindashboard' },
@@ -216,6 +252,9 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
               >
                 <span className="sidebar__nav-icon"><item.icon size={18} /></span>
                 <span className="sidebar__nav-label">{item.label}</span>
+                {item.path === '/adminbarangaysupport' && supportUnreadCount > 0 && (
+                  <span className="sidebar__nav-badge">{supportUnreadCount > 9 ? '9+' : supportUnreadCount}</span>
+                )}
               </button>
             );
           })}

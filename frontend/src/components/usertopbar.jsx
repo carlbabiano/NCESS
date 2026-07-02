@@ -195,6 +195,19 @@ function upsertChatNotif(setNotifs, unreadMessages, markUnread = true) {
   });
 }
 
+// ── Grouping helpers (mirrors admin-side "N requests" group cards) ────────
+function notifKind(n) { return n.kind || 'announcement'; }
+
+function buildNotifGroup(items) {
+  if (!items.length) return null;
+  const lastTs = items.reduce((latest, n) => {
+    if (!n.ts) return latest;
+    if (!latest) return n.ts;
+    return new Date(n.ts).getTime() > new Date(latest).getTime() ? n.ts : latest;
+  }, '');
+  return { count: items.length, lastTs, items };
+}
+
 function fmtRelative(iso) {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
@@ -857,6 +870,14 @@ export default function UserTopbar({
   const chatUnread = Math.max(0, chatUnreadTotal - chatUnreadSeen);
   const unreadCount = unreadNotifCount + chatUnread;
   const showNotificationDot = showBellDot && unreadCount === 0 && !bellDotSeen;
+
+  // ── Grouped notification sections (admin-style: one count-card per kind) ──
+  const announcementGroup  = buildNotifGroup(notifs.filter(n => notifKind(n) === 'announcement'));
+  const appointmentGroup   = buildNotifGroup(notifs.filter(n => notifKind(n) === 'appointment'));
+  const complaintGroup     = buildNotifGroup(notifs.filter(n => notifKind(n) === 'complaint'));
+  const profileChangeGroup = buildNotifGroup(notifs.filter(n => notifKind(n) === 'profile_change'));
+  const chatGroupItem      = notifs.find(n => notifKind(n) === 'chat') || null;
+  const hasAnyNotif = !!(announcementGroup || appointmentGroup || complaintGroup || profileChangeGroup || chatGroupItem);
 
   const markBellDotSeen = useCallback(() => {
     setBellDotSeen(true);
@@ -1831,6 +1852,34 @@ export default function UserTopbar({
     openNotificationPath('/userannouncements', { announcementId: n._id || '' });
   }
 
+  // Clear every notification belonging to one group/kind (mirrors admin's per-section Clear).
+  function clearNotifGroup(kind) {
+    setNotifs(prev => {
+      const next = prev.filter(n => notifKind(n) !== kind);
+      saveNotifs(next);
+      return next;
+    });
+    if (kind === 'chat') {
+      markChatUnreadSeen(chatUnreadTotal);
+    }
+  }
+
+  // Open a group card — jumps straight to the single item's target when there's
+  // only one, otherwise opens the general page since the group is collapsed.
+  function openNotifGroup(kind, group) {
+    if (kind === 'profile_change') {
+      openNotification({ kind: 'profile_change' });
+      return;
+    }
+    if (group?.count === 1) {
+      openNotification(group.items[0]);
+      return;
+    }
+    if (kind === 'announcement') { openNotificationPath('/userannouncements'); return; }
+    if (kind === 'appointment')  { openNotificationPath('/userappointments'); return; }
+    if (kind === 'complaint')    { openNotificationPath('/usercomplaints'); return; }
+  }
+
   const fullName     = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(' ') || 'Resident';
   const shortAddress = [formData.purok, formData.houseNo].filter(Boolean).join(', ') || formData.homeAddress || 'New Cabalan';
   const requestPreviewChanges = getChangedProfileData(profileBaseline, requestData);
@@ -1983,7 +2032,7 @@ export default function UserTopbar({
 
         {/* Notification list */}
         <div className="utb-notif-list">
-          {notifs.length === 0 ? (
+          {!hasAnyNotif ? (
             <div className="utb-notif-empty">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32">
                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -1993,147 +2042,177 @@ export default function UserTopbar({
               <p>New announcements and updates from the barangay will appear here.</p>
             </div>
           ) : (
-            notifs.map(n => {
-              if (n.kind === 'chat') {
-                const count = Math.max(0, Number(n.unreadMessages) || 0);
-                return (
-                  <button
-                    key={n.uid}
-                    type="button"
-                    className={`utb-notif-item utb-notif-item--icon${n.read ? '' : ' utb-notif-item--unread'}`}
-                    onClick={() => openNotification(n)}
-                  >
-                    <div className="utb-notif-icon-wrap" style={{ background: '#2563eb18', color: '#2563eb' }}>
-                      <NotificationIcon kind="chat" />
-                    </div>
-                    <div className="utb-notif-body">
-                      <div className="utb-notif-top">
-                        <span className="utb-notif-cat" style={{ background: '#2563eb18', color: '#2563eb' }}>Barangay Support</span>
-                        <span className="utb-notif-time">{fmtRelative(n.ts)}</span>
-                      </div>
-                      <p className="utb-notif-title">{n.body || `You have ${count || 1} unread message${count === 1 ? '' : 's'} from the barangay.`}</p>
-                      <p className="utb-notif-sub">Open Barangay Support to view.</p>
-                    </div>
-                  </button>
-                );
-              }
-
-              // ── Appointment notification ──
-              if (n.kind === 'appointment') {
-                const cfg = APPT_NOTIF[n.type] || { color: '#6b7280', label: n.type };
-                return (
-                  <button
-                    key={n.uid || `${n._id}-${n.type}`}
-                    type="button"
-                    className={`utb-notif-item utb-notif-item--icon${n.read ? '' : ' utb-notif-item--unread'}`}
-                    onClick={() => openNotification(n)}
-                  >
-                    <div className="utb-notif-icon-wrap" style={{ background: cfg.color + '18', color: cfg.color }}>
-                      <NotificationIcon kind="appointment" type={n.type} />
-                    </div>
-                    <div className="utb-notif-body">
-                      <div className="utb-notif-top">
-                        <span className="utb-notif-cat" style={{ background: cfg.color + '18', color: cfg.color }}>{cfg.label}</span>
-                        <span className="utb-notif-time">{fmtRelative(n.ts)}</span>
-                      </div>
-                      <p className="utb-notif-title">{n.title}</p>
-                      <p className="utb-notif-sub">
-                        {n.type === 'reminder_24h'                   && `Tomorrow · ${n.date} at ${n.time}`}
-                        {n.type === 'reminder_1h'                    && `Starting in ~1 hour · ${n.date} at ${n.time}`}
-                        {n.type === 'appointment_closed'             && `Your appointment on ${n.date} at ${n.time} has been closed.`}
-                        {n.type === 'appointment_cancelled_by_admin' && `Cancelled · ${n.date} at ${n.time}${n.extra ? ` — "${n.extra}"` : ''}`}
-                      </p>
-                    </div>
-                  </button>
-                );
-              }
-
-              // ── Complaint status notification ──
-              if (n.kind === 'complaint') {
-                const cfg = COMPLAINT_STATUS_NOTIF[n.newStatus] || { color: '#6b7280', label: n.newStatus };
-                return (
-                  <button
-                    key={n.uid}
-                    type="button"
-                    className={`utb-notif-item utb-notif-item--icon${n.read ? '' : ' utb-notif-item--unread'}`}
-                    onClick={() => openNotification(n)}
-                  >
-                    <div className="utb-notif-icon-wrap" style={{ background: cfg.color + '18', color: cfg.color }}>
-                      <NotificationIcon kind="complaint" type={n.newStatus} />
-                    </div>
-                    <div className="utb-notif-body">
-                      <div className="utb-notif-top">
-                        <span className="utb-notif-cat" style={{ background: cfg.color + '18', color: cfg.color }}>{cfg.label}</span>
-                        <span className="utb-notif-time">{fmtRelative(n.ts)}</span>
-                      </div>
-                      <p className="utb-notif-title">{n.title}</p>
-                      <p className="utb-notif-sub">
-                        Your complaint
-                        {n.prevStatus ? ` has moved from ${n.prevStatus} →` : ' is now'}
-                        {' '}<strong>{n.newStatus}</strong>
-                        {n.cmpId ? ` · ${n.cmpId}` : ''}
-                      </p>
-                      {n.resolutionNote && (
-                        <p className="utb-notif-note">"{n.resolutionNote}"</p>
-                      )}
-                    </div>
-                  </button>
-                );
-              }
-
-              if (n.kind === 'profile_change') {
-                return (
-                  <button
-                    key={n.uid}
-                    type="button"
-                    className={`utb-notif-item utb-notif-item--icon${n.read ? '' : ' utb-notif-item--unread'}`}
-                    onClick={() => openNotification(n)}
-                  >
-                    <div className="utb-notif-icon-wrap" style={{ background: n.color + '18', color: n.color }}>
-                      <NotificationIcon kind="profile_change" type={n.type} />
-                    </div>
-                    <div className="utb-notif-body">
-                      <div className="utb-notif-top">
-                        <span className="utb-notif-cat" style={{ background: n.color + '18', color: n.color }}>{n.label}</span>
-                        <span className="utb-notif-time">{fmtRelative(n.ts)}</span>
-                      </div>
-                      <p className="utb-notif-title">{n.title}</p>
-                      <p className="utb-notif-sub">{n.body}</p>
-                      {n.reason && (
-                        <p className="utb-notif-note">"{n.reason}"</p>
-                      )}
-                    </div>
-                  </button>
-                );
-              }
-
-              // ── Announcement notification (default) ──
-              return (
+            <>
+              {/* ── Announcements ── */}
+              <div className="utb-notif-section-header">
+                <div className="utb-notif-section-header__title">
+                  <NotificationIcon kind="announcement" />
+                  <span>Announcements</span>
+                </div>
+                {announcementGroup && (
+                  <button className="utb-notif-clear" onClick={() => clearNotifGroup('announcement')} title="Clear">Clear</button>
+                )}
+              </div>
+              {announcementGroup ? (
                 <button
-                  key={`${n._id}-${n.type}`}
                   type="button"
-                  className={`utb-notif-item${n.read ? '' : ' utb-notif-item--unread'}`}
-                  onClick={() => openNotification(n)}
+                  className="utb-notif-group-card"
+                  onClick={() => openNotifGroup('announcement', announcementGroup)}
                 >
-                  <div className="utb-notif-dot" style={{ background: CAT_COLOR[n.category] || '#6b7280' }} />
-                  <div className="utb-notif-body">
-                    <div className="utb-notif-top">
-                      <span className="utb-notif-cat" style={{ background: (CAT_COLOR[n.category] || '#6b7280') + '18', color: CAT_COLOR[n.category] || '#6b7280' }}>
-                        {n.category}
-                      </span>
-                      {n.type === 'updated' && <span className="utb-notif-updated-tag">Updated</span>}
-                      <span className="utb-notif-time">{fmtRelative(n.ts)}</span>
-                    </div>
-                    <p className="utb-notif-title">{n.title}</p>
-                    <p className="utb-notif-sub">{n.body}</p>
-                    <p className="utb-notif-author">by {n.author}</p>
+                  <div className="utb-notif-group-icon" style={{ background: '#4f46e518', color: '#4f46e5' }}>
+                    <NotificationIcon kind="announcement" />
+                  </div>
+                  <div className="utb-notif-group-body">
+                    <p className="utb-notif-group-title">
+                      {announcementGroup.count} new announcement{announcementGroup.count > 1 ? 's' : ''}
+                    </p>
+                    <p className="utb-notif-group-sub">
+                      Latest: "{announcementGroup.items[0]?.title}" · {fmtRelative(announcementGroup.lastTs)}
+                    </p>
                   </div>
                 </button>
-              );
-            })
+              ) : (
+                <div className="utb-notif-empty--sm">No new announcements</div>
+              )}
+
+              <div className="utb-notif-divider"/>
+
+              {/* ── Appointments ── */}
+              <div className="utb-notif-section-header">
+                <div className="utb-notif-section-header__title">
+                  <NotificationIcon kind="appointment" />
+                  <span>Appointments</span>
+                </div>
+                {appointmentGroup && (
+                  <button className="utb-notif-clear" onClick={() => clearNotifGroup('appointment')} title="Clear">Clear</button>
+                )}
+              </div>
+              {appointmentGroup ? (
+                <button
+                  type="button"
+                  className="utb-notif-group-card"
+                  onClick={() => openNotifGroup('appointment', appointmentGroup)}
+                >
+                  <div className="utb-notif-group-icon" style={{ background: '#05966918', color: '#059669' }}>
+                    <NotificationIcon kind="appointment" />
+                  </div>
+                  <div className="utb-notif-group-body">
+                    <p className="utb-notif-group-title">
+                      {appointmentGroup.count} appointment update{appointmentGroup.count > 1 ? 's' : ''}
+                    </p>
+                    <p className="utb-notif-group-sub">
+                      Latest: {(APPT_NOTIF[appointmentGroup.items[0]?.type] || {}).label || 'Update'} · {fmtRelative(appointmentGroup.lastTs)}
+                    </p>
+                  </div>
+                </button>
+              ) : (
+                <div className="utb-notif-empty--sm">No new appointment updates</div>
+              )}
+
+              <div className="utb-notif-divider"/>
+
+              {/* ── Complaints ── */}
+              <div className="utb-notif-section-header">
+                <div className="utb-notif-section-header__title">
+                  <NotificationIcon kind="complaint" />
+                  <span>Complaints</span>
+                </div>
+                {complaintGroup && (
+                  <button className="utb-notif-clear" onClick={() => clearNotifGroup('complaint')} title="Clear">Clear</button>
+                )}
+              </div>
+              {complaintGroup ? (
+                <button
+                  type="button"
+                  className="utb-notif-group-card"
+                  onClick={() => openNotifGroup('complaint', complaintGroup)}
+                >
+                  <div className="utb-notif-group-icon" style={{ background: '#d9770618', color: '#d97706' }}>
+                    <NotificationIcon kind="complaint" />
+                  </div>
+                  <div className="utb-notif-group-body">
+                    <p className="utb-notif-group-title">
+                      {complaintGroup.count} complaint update{complaintGroup.count > 1 ? 's' : ''}
+                    </p>
+                    <p className="utb-notif-group-sub">
+                      Latest: {complaintGroup.items[0]?.title || 'Complaint'} is now <strong>{complaintGroup.items[0]?.newStatus}</strong> · {fmtRelative(complaintGroup.lastTs)}
+                    </p>
+                  </div>
+                </button>
+              ) : (
+                <div className="utb-notif-empty--sm">No new complaint updates</div>
+              )}
+
+              <div className="utb-notif-divider"/>
+
+              {/* ── Profile / Account update requests ── */}
+              <div className="utb-notif-section-header">
+                <div className="utb-notif-section-header__title">
+                  <NotificationIcon kind="profile_change" />
+                  <span>Profile Updates</span>
+                </div>
+                {profileChangeGroup && (
+                  <button className="utb-notif-clear" onClick={() => clearNotifGroup('profile_change')} title="Clear">Clear</button>
+                )}
+              </div>
+              {profileChangeGroup ? (
+                <button
+                  type="button"
+                  className="utb-notif-group-card"
+                  onClick={() => openNotifGroup('profile_change', profileChangeGroup)}
+                >
+                  <div className="utb-notif-group-icon" style={{ background: '#7c3aed18', color: '#7c3aed' }}>
+                    <NotificationIcon kind="profile_change" type={profileChangeGroup.items[0]?.type} />
+                  </div>
+                  <div className="utb-notif-group-body">
+                    <p className="utb-notif-group-title">
+                      {profileChangeGroup.count} profile update response{profileChangeGroup.count > 1 ? 's' : ''}
+                    </p>
+                    <p className="utb-notif-group-sub">
+                      Latest: {profileChangeGroup.items[0]?.label} · {fmtRelative(profileChangeGroup.lastTs)}
+                    </p>
+                  </div>
+                </button>
+              ) : (
+                <div className="utb-notif-empty--sm">No new profile update responses</div>
+              )}
+
+              <div className="utb-notif-divider"/>
+
+              {/* ── Chat ── */}
+              <div className="utb-notif-section-header">
+                <div className="utb-notif-section-header__title">
+                  <NotificationIcon kind="chat" />
+                  <span>Chat Messages</span>
+                </div>
+                {chatGroupItem && (
+                  <button className="utb-notif-clear" onClick={() => clearNotifGroup('chat')} title="Clear">Clear</button>
+                )}
+              </div>
+              {chatGroupItem ? (
+                <button
+                  type="button"
+                  className="utb-notif-group-card"
+                  onClick={() => openNotification(chatGroupItem)}
+                >
+                  <div className="utb-notif-group-icon" style={{ background: '#2563eb18', color: '#2563eb' }}>
+                    <NotificationIcon kind="chat" />
+                  </div>
+                  <div className="utb-notif-group-body">
+                    <p className="utb-notif-group-title">Barangay Support</p>
+                    <p className="utb-notif-group-sub">
+                      {chatGroupItem.body || `You have ${Math.max(0, Number(chatGroupItem.unreadMessages) || 0) || 1} unread message(s) from the barangay.`}
+                    </p>
+                  </div>
+                </button>
+              ) : (
+                <div className="utb-notif-empty--sm">No new messages</div>
+              )}
+            </>
           )}
         </div>
       </div>
+
 
       {/* ─── Side Profile Panel ─── */}
       <div

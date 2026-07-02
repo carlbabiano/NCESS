@@ -8,13 +8,46 @@ import {
   LogOut,
   X
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import newcablogo from '../assets/newcab.png';
 import './usersidebar.css';
 
 export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
   const location = useLocation();
   const navigate = useNavigate();
+
+  // ── Barangay Support unread badge (sidebar-only, independent of the topbar bell) ──
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const apiBase = import.meta.env.VITE_BACKEND_URL || '';
+    if (!token || !apiBase) return;
+
+    const fetchSupportUnread = () => {
+      fetch(`${apiBase}/chat/my-conversation`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(conv => setSupportUnreadCount(conv?.unreadUser || 0))
+        .catch(() => {});
+    };
+
+    fetchSupportUnread();
+
+    const socket = io(
+      import.meta.env.VITE_SOCKET_URL ||
+      import.meta.env.VITE_BACKEND_URL?.replace('/api', '') || '',
+      { auth: { token }, transports: ['websocket'], reconnection: true }
+    );
+    socket.on('chat_unread_update', ({ unreadUser }) => {
+      setSupportUnreadCount(unreadUser || 0);
+    });
+
+    return () => socket.disconnect();
+  }, []);
 
   const HomeIcon = () => (
     <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
@@ -77,6 +110,9 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                   <item.icon size={18} />
                 </span>
                 <span className="sidebar__nav-label">{item.label}</span>
+                {item.path === '/userbarangaysupport' && supportUnreadCount > 0 && (
+                  <span className="sidebar__nav-badge">{supportUnreadCount > 9 ? '9+' : supportUnreadCount}</span>
+                )}
               </button>
             );
           })}
