@@ -1066,10 +1066,12 @@ export default function UserAppointments() {
                         {meta.blocked
                           ? 'Blocked'
                           : meta.full
-                            ? `Full ${meta.count}/${meta.max}`
+                            ? 'Fully booked'
                             : meta.count === undefined
                               ? 'Checking...'
-                              : `${meta.remaining}/${meta.max} left`}
+                              : meta.max === 1
+                                ? 'Available'
+                                : `${meta.remaining} of ${meta.max} available`}
                       </small>
                     </button>
                   );

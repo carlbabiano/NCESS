@@ -17,7 +17,12 @@ router.get('/appointments/slot-usage', async (req, res) => {
   try {
     const { date, time } = req.query;
     if (!date || !time) return res.status(400).json({ message: 'date and time required' });
-    const count = await Appointment.countDocuments({ date, time, cancelled: { $ne: true } });
+    // Match the same per-person counting used by validateAppointmentSlot:
+    // one resident can hold multiple appointment docs for the same slot
+    // (one per purpose), but that's still just one seat, not several.
+    const docs = await Appointment.find({ date, time, cancelled: { $ne: true } }).select('userId');
+    const tokenSet = new Set(docs.map(d => (d.userId ? String(d.userId) : String(d._id))));
+    const count = tokenSet.size;
     res.json({ date, time, count });
   } catch (err) {
     res.status(500).json({ message: err.message });
