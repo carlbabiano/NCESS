@@ -37,8 +37,11 @@
 .uapt-unassigned{color:#9ca3af;font-style:italic;}
 .uapt-badge{display:inline-block;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;white-space:nowrap;}
 .us--scheduled{background:#dbeafe;color:#1e40af;}
+.us--pending-review{background:#ede9fe;color:#6d28d9;}
+.us--denied{background:#fee2e2;color:#b91c1c;}
 .us--closed{background:#f3f4f6;color:#374151;}
 .us--cancelled{background:#ffedd5;color:#c2410c;}
+.us--released{background:#bbf7d0;color:#166534;}
 .uapt-empty{text-align:center;color:#9ca3af;padding:48px!important;font-size:14px;}
 .uapt-footer{font-size:13px;color:#9ca3af;}
 .uapt-footer strong{color:#374151;}
@@ -47,6 +50,7 @@
 .uapt-rejection-note{display:flex;align-items:flex-start;gap:4px;font-size:11.5px;color:#ef4444;font-style:italic;margin:4px 0 0;line-height:1.4;max-width:200px;}
 .uapt-cancel-reason{display:flex;align-items:flex-start;gap:6px;font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-left:3px solid #f59e0b;border-radius:6px;padding:6px 10px;margin:7px 0 0;line-height:1.5;max-width:260px;}
 .uapt-cancel-reason svg{stroke:#f59e0b;flex-shrink:0;margin-top:2px;width:12px;height:12px;}
+.uapt-denial-reason{font-size:12px;color:#dc2626;margin:7px 0 0;line-height:1.5;max-width:260px;}
 
 /* ── Pagination ── */
 .uapt-pagination{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-top:1px solid #f3f4f6;gap:12px;flex-wrap:wrap;}
@@ -68,6 +72,9 @@
 
 /* ── Modal ── */
 .uapt-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;animation:uFadeIn 0.15s ease;}
+/* Sits above other modals (e.g. the reschedule modal) that may still be
+   mounted underneath it, regardless of which flow opened it. */
+.uapt-overlay--elevated{z-index:150;background:rgba(0,0,0,0.55);}
 @keyframes uFadeIn{from{opacity:0}to{opacity:1}}
 .uapt-modal{background:#fff;border-radius:16px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,0.18);animation:uSlideUp 0.2s ease;display:flex;flex-direction:column;max-height:90vh;overflow:hidden;}
 .uapt-modal--book{max-width:560px;}
@@ -78,7 +85,8 @@
 .uapt-modal__close{width:30px;height:30px;border-radius:8px;border:1px solid #e9ecef;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;}
 .uapt-modal__close svg{width:15px;height:15px;stroke:#6b7280;}
 .uapt-modal__body{padding:20px 24px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;flex:1;}
-.uapt-modal__footer{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #f3f4f6;flex-shrink:0;}
+.uapt-modal__footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #f3f4f6;flex-shrink:0;flex-wrap:wrap;}
+.uapt-modal__footer .uapt-form-error{margin-right:auto;text-align:left;flex:1 1 auto;min-width:0;}
 .uapt-form-group{display:flex;flex-direction:column;gap:5px;}
 .uapt-form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .uapt-form-group label{font-size:13px;font-weight:600;color:#374151;}
@@ -87,6 +95,24 @@
 .uapt-form-group input:focus,.uapt-form-group select:focus,.uapt-form-group textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
 .uapt-form-group textarea{resize:vertical;}
 .uapt-form-error{color:#dc2626;font-size:13px;font-weight:600;margin:0;}
+
+.uapt-purpose-checks{display:flex;flex-direction:column;gap:8px;}
+.uapt-purpose-check{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:9px;font-size:13.5px;color:#374151;cursor:pointer;transition:border-color 0.15s,background 0.15s;}
+.uapt-purpose-check:hover{background:#f9fafb;}
+.uapt-purpose-check:has(input:checked){border-color:#2563eb;background:#eff6ff;color:#1d4ed8;font-weight:600;}
+.uapt-purpose-check input{accent-color:#2563eb;width:15px;height:15px;flex-shrink:0;cursor:pointer;}
+
+.uapt-reissue-notice{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:12px 14px;font-size:13.5px;line-height:1.5;margin:0;}
+.uapt-reissue-notice strong{color:#78350f;}
+.uapt-reissue-purpose-block{border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-top:12px;display:flex;flex-direction:column;gap:10px;}
+.uapt-reissue-purpose-label{margin:0;font-size:13px;color:#374151;}
+.uapt-reissue-purpose-label strong{color:#111827;}
+.uapt-reissue-subtext{font-size:13.5px;color:#374151;margin:0;}
+.uapt-reissue-options{display:flex;flex-direction:column;gap:8px;}
+.uapt-reissue-option{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:9px;font-size:13.5px;color:#374151;cursor:pointer;transition:border-color 0.15s,background 0.15s;}
+.uapt-reissue-option:hover{background:#f9fafb;}
+.uapt-reissue-option:has(input:checked){border-color:#2563eb;background:#eff6ff;color:#1d4ed8;font-weight:600;}
+.uapt-reissue-option input{accent-color:#2563eb;width:15px;height:15px;flex-shrink:0;cursor:pointer;}
 .uapt-book-one-panel{display:grid;grid-template-columns:minmax(220px,0.8fr) minmax(420px,1.2fr);gap:18px;align-items:start;}
 .uapt-book-details{display:flex;flex-direction:column;gap:14px;min-width:0;}
 .uapt-book-calendar{min-width:0;}

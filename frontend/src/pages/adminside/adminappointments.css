@@ -415,8 +415,11 @@
 }
 
 .status--scheduled { background: #dcfce7; color: #166534; }
+.status--pending-review { background: #fef3c7; color: #92400e; }
+.status--denied     { background: #fee2e2; color: #b91c1c; }
 .status--closed    { background: #f3f4f6; color: #374151; }
 .status--cancelled { background: #ffe4e6; color: #9f1239; }
+.status--released  { background: #bbf7d0; color: #166534; }
 
 /* ─── 3-dot Menu ─────────────────────────────────── */
 .appt-table__menu-cell {
@@ -480,6 +483,66 @@
 }
 .appt-table__view-btn svg { width: 15px; height: 15px; }
 .appt-table__view-btn:hover { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
+
+.appt-table__release-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #16a34a;
+  background: #16a34a;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(22, 163, 74, 0.25);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.appt-table__release-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+.appt-table__release-btn:hover {
+  background: #15803d;
+  border-color: #15803d;
+  box-shadow: 0 2px 5px rgba(22, 163, 74, 0.35);
+  transform: translateY(-1px);
+}
+.appt-table__release-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(22, 163, 74, 0.3);
+}
+.appt-table__release-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.appt-table__no-action {
+  color: #d1d5db;
+  font-size: 13px;
+}
+
+.appt-table__viewmore-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #d97706;
+  background: #fff8ef;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #92400e;
+  font-size: 12.5px;
+  font-weight: 700;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.appt-table__viewmore-btn:hover {
+  background: #ffedd5;
+  transform: translateY(-1px);
+}
+.appt-table__viewmore-btn:active { transform: translateY(0); }
 
 /* ─── Dropdown ───────────────────────────────────── */
 .appt-dropdown {
@@ -2833,4 +2896,212 @@
 @media (max-width: 480px) {
   .appt-header h1 { font-size: 18px; }
   .appt-tab { padding: 8px 12px; font-size: 12.5px; }
+}
+/* ─── Barangay Clearance Reissue Review Panel ────────── */
+.appt-reissue-row td {
+  padding: 0 !important;
+  border-bottom: 1px solid #f3d9b1 !important;
+}
+
+.appt-reissue-panel {
+  background: #fff8ef;
+  border-top: 1px solid #fde7c7;
+  border-bottom: 1px solid #fde7c7;
+}
+
+/* Same display:table / table-cell technique (and identical column widths +
+   padding) as .appt-appointment-item, so this row lines up exactly with
+   the other dropdown list below it instead of drifting via grid gaps. */
+.appt-reissue-panel--row {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.appt-reissue-panel--mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 10px 12px 14px;
+  padding: 14px;
+  border: 1px solid #fde7c7;
+  border-radius: 12px;
+}
+
+.appt-reissue-panel__col {
+  min-width: 0;
+}
+
+.appt-reissue-panel--row > .appt-reissue-panel__col {
+  display: table-cell;
+  vertical-align: top;
+  padding: 16px 18px;
+}
+
+.appt-reissue-panel__col--id    { width: 15%; white-space: nowrap; }
+.appt-reissue-panel__col--label { width: 20%; }
+.appt-reissue-panel__col--dates { width: 18%; }
+.appt-reissue-panel__col--reason{ width: 27%; }
+.appt-reissue-panel__col--requested { width: 10%; }
+.appt-reissue-panel__col--actions   { width: 10%; }
+
+.appt-reissue-panel__label-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.appt-reissue-panel__icon {
+  flex: 0 0 auto;
+  color: #d97706;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #ffedd5;
+}
+
+.appt-reissue-panel__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #92400e;
+  line-height: 1.4;
+  padding-top: 3px;
+}
+
+.appt-reissue-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.appt-reissue-panel__field + .appt-reissue-panel__field {
+  margin-top: 10px;
+}
+
+.appt-reissue-panel__field strong,
+.appt-reissue-panel__col--reason strong {
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.appt-reissue-panel__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #9a8a72;
+}
+
+.appt-reissue-panel__requested {
+  font-size: 12.5px;
+  color: #57534e;
+}
+
+.appt-reissue-panel__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.appt-reissue-panel__approve,
+.appt-reissue-panel__deny {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  width: auto;
+  transition: opacity 0.15s ease;
+}
+
+.appt-reissue-panel__approve {
+  background: #16a34a;
+  color: #fff;
+}
+
+.appt-reissue-panel__deny {
+  background: #dc2626;
+  color: #fff;
+}
+
+.appt-reissue-panel__approve:hover,
+.appt-reissue-panel__deny:hover {
+  opacity: 0.9;
+}
+
+.appt-reissue-panel__approve:disabled,
+.appt-reissue-panel__deny:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .appt-reissue-panel--row {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px;
+    gap: 12px;
+  }
+  .appt-reissue-panel--row > .appt-reissue-panel__col {
+    display: block;
+    width: auto;
+    padding: 0;
+  }
+  .appt-reissue-panel__actions {
+    flex-direction: row;
+  }
+  .appt-reissue-panel__approve,
+  .appt-reissue-panel__deny {
+    width: auto;
+  }
+}
+
+/* ─── Reissue Details Modal (opened via "View More") ───────────── */
+.appt-reissue-detail-modal {
+  max-width: 480px;
+}
+
+.appt-reissue-detail-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.appt-reissue-detail-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.appt-reissue-detail-id {
+  display: flex;
+  align-items: center;
+}
+
+.appt-reissue-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+  padding: 14px 16px;
+  background: #fff8ef;
+  border: 1px solid #fde7c7;
+  border-radius: 12px;
+}
+
+.appt-reissue-detail-grid__full {
+  grid-column: 1 / -1;
 }

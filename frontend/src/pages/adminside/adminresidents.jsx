@@ -1044,7 +1044,7 @@ export default function AdminResidents({ initialTab = 'All' }) {
           {/* Page Header */}
           <div className="res-header">
             <div>
-              <h1>Resident Profiles</h1>
+              <h1>Resident Account Approval</h1>
               <p>View and manage all registered residents of New Cabalan.</p>
             </div>
           </div>

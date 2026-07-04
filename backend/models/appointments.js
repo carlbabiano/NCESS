@@ -12,7 +12,19 @@ const appointmentSchema = new mongoose.Schema(
     cancelled: { type: Boolean, default: false },
     cancelReason: { type: String, default: '' },
     notes:         { type: String, default: '' }, // general notes
-    status: { type: String, enum: ['Scheduled', 'Cancelled', 'Closed'], default: 'Scheduled' },
+    status: { type: String, enum: ['Scheduled', 'Pending Review', 'Denied', 'Cancelled', 'Closed', 'Released'], default: 'Scheduled' },
+
+    // Populated when a resident requests a repeat/re-issued Barangay Clearance
+    // while a prior clearance is still within its validity window.
+    reissueRequest: {
+      isReissue:             { type: Boolean, default: false },
+      previousClearanceDate: { type: String, default: '' }, // raw "YYYY-MM-DD" of the prior clearance
+      reason:                { type: String, default: '' }, // e.g. "Lost Document"
+      otherText:             { type: String, default: '' }, // additional details / "Others" description
+      reviewStatus:          { type: String, enum: ['Pending', 'Approved', 'Denied'], default: 'Pending' },
+      reviewNote:            { type: String, default: '' }, // admin's denial note, if any
+      reviewedAt:            { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

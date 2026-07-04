@@ -10,14 +10,26 @@ import './userappointments.css';
 const API_URL  = import.meta.env.VITE_BACKEND_URL;
 const PAGE_SIZE = 10;
 const PURPOSE = [
-  'Barangay Clearance', 'Health Certificate', 'Indigency Certificate',
-  'Barangay ID', 'Business Permit', 'Financial Assistance',
-  'Senior Citizen ID', 'PWD ID', 'Cedula Issuance', 'Complaint Filing', 'Other',
+  'Barangay Clearance', 'Indigency Certificate',
 ];
+// Purposes that expire after DOCUMENT_VALIDITY_MONTHS and require a reissue
+// reason if the resident already has a valid one on file.
+const REISSUABLE_PURPOSES = ['Barangay Clearance', 'Indigency Certificate'];
+const REISSUE_REASONS = [
+  'Lost Document',
+  'Damaged Document',
+  'Different Purpose',
+  'Correction of Information',
+  'Others',
+];
+const CLEARANCE_VALIDITY_MONTHS = 6; // shared validity window for both document types
 const STATUS_CLS = {
   Scheduled: 'us--scheduled',
+  'Pending Review': 'us--pending-review',
+  Denied:    'us--denied',
   Closed:    'us--closed',
   Cancelled: 'us--cancelled',
+  Released:  'us--released',
 };
 
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -72,6 +84,18 @@ const DEFAULT_SCHEDULE = {
   sunday:    { enabled: false, start: '09:00', end: '12:00', slotDuration: 30, maxPerSlot: 1 },
 };
 
+// Always lists "Barangay Clearance" first, then joins the rest with "and"
+// (e.g. "Barangay Clearance and Indigency Certificate").
+function formatPurposeList(list) {
+  const ordered = [...list].sort((a, b) => {
+    if (a === b) return 0;
+    if (a === 'Barangay Clearance') return -1;
+    if (b === 'Barangay Clearance') return 1;
+    return 0;
+  });
+  return ordered.join(' and ');
+}
+
 function getAppointmentUniqueId(appt) {
   if (!appt) return '';
   if (appt.uniqueID) return String(appt.uniqueID);
@@ -103,10 +127,32 @@ export default function UserAppointments() {
 
   // Book modal
   const [showModal,  setShowModal]  = useState(false);
-  const [purpose,    setPurpose]    = useState('');
+  const [purpose,    setPurpose]    = useState(''); // kept for the legacy step wizard below (currently unused/disabled)
+  const [purposes,   setPurposes]   = useState([]);  // multi-select: purposes checked by the resident
   const [note,       setNote]       = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError,  setFormError]  = useState('');
+
+  // "Existing Appointment Found" conflict modal (shown when the resident
+  // tries to book while already having an active appointment that day)
+  const [existingApptConflict, setExistingApptConflict] = useState(null); // the conflicting appointment
+
+  // Reissue soft-block (re-issuance reason required within 6 months) —
+  // applies to both Barangay Clearance and Indigency Certificate. If a
+  // resident books several purposes at once and more than one is due for
+  // renewal, all conflicts are shown together in ONE modal with a single
+  // shared reason, instead of walking through them one at a time.
+  const [showReissueBlock, setShowReissueBlock] = useState(false);
+  const [reissueBlockInfo, setReissueBlockInfo] = useState(null); // single-conflict case: { purpose, date, rawDate, status }
+  const [reissueConflicts, setReissueConflicts] = useState([]);   // multi-conflict case: [{ purpose, recent }, ...]
+  const [reissueReason,    setReissueReason]    = useState('');   // single-conflict case
+  const [reissueOtherText, setReissueOtherText] = useState('');   // single-conflict case
+  const [reissueReasonsByPurpose,    setReissueReasonsByPurpose]    = useState({}); // multi-conflict case: { [purpose]: reason }
+  const [reissueOtherTextByPurpose,  setReissueOtherTextByPurpose]  = useState({}); // multi-conflict case: { [purpose]: otherText }
+  const [reissueError,     setReissueError]     = useState('');
+  // Tracks which flow opened the reissue soft-block modal, so its confirm
+  // button knows whether to finish a booking or a reschedule.
+  const [reissueSource,    setReissueSource]    = useState('booking'); // 'booking' | 'reschedule'
 
   // Availability
   const [schedule,      setSchedule]      = useState(DEFAULT_SCHEDULE);
@@ -139,6 +185,7 @@ export default function UserAppointments() {
   const [rsTime,           setRsTime]           = useState('');
   const [rescheduling,     setRescheduling]      = useState(false);
   const [rescheduleError,  setRescheduleError]  = useState('');
+  const [rsPurposes,       setRsPurposes]       = useState([]); // documents selected to keep/add in the reschedule modal
 
   const [toast, setToast] = useState('');
   const showToast = useCallback(msg => {
@@ -178,7 +225,7 @@ export default function UserAppointments() {
   // Open modal pre-filled from quick link
   useEffect(() => {
     if (location.state && location.state.quickPurpose) {
-      setPurpose(location.state.quickPurpose);
+      setPurposes([location.state.quickPurpose]);
       setShowModal(true);
     }
   }, [location.state]);
@@ -231,11 +278,15 @@ export default function UserAppointments() {
       { auth: { token }, transports: ['websocket'], reconnection: true }
     );
 
-    // Admin cancelled this user's appointment
+    // Admin cancelled this user's appointment, or denied a reissue request
     socket.on('appointment_cancelled_by_admin', (appt) => {
       setAppointments(prev => prev.map(a => a._id === appt._id ? appt : a));
       setSlotRefreshKey(prev => prev + 1);
-      showToast('Your appointment has been cancelled by the admin.');
+      showToast(
+        appt.status === 'Denied'
+          ? `Your repeat ${appt.purpose || 'document'} request was denied by the admin.`
+          : 'Your appointment has been cancelled by the admin.'
+      );
     });
 
     // Admin edited appointment details (date/time/assignedTo etc.)
@@ -511,25 +562,52 @@ export default function UserAppointments() {
   };
 
   /* ── Book ── */
-  const handleSubmit = async () => {
-    if (!purpose)      return setFormError('Please select a purpose.');
-    if (!selectedDate) return setFormError('Please pick a date.');
-    if (!selectedTime) return setFormError('Please pick a time slot.');
+  // Books every checked purpose in a single request; the backend creates one
+  // appointment document per purpose, all sharing the same date/time slot.
+  const submitBooking = async (reissuePayloads = null) => {
     setFormError(''); setSubmitting(true);
     try {
       const res = await fetch(`${API_URL}/appointments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ purpose, date: selectedDate, time: selectedTime, notes: note }),
+        body: JSON.stringify({
+          purposes, date: selectedDate, time: selectedTime, notes: note,
+          ...(reissuePayloads && reissuePayloads.length ? { reissueRequests: reissuePayloads } : {}),
+        }),
       });
       const data = await res.json();
-      if (!res.ok) return setFormError(data.message || 'Booking failed.');
-      setAppointments(prev => [data, ...prev]);
+      if (!res.ok) {
+        if (data.code === 'EXISTING_APPOINTMENT' && data.existingAppointment) {
+          setShowModal(false);
+          setShowReissueBlock(false);
+          setExistingApptConflict({
+            ...data.existingAppointment,
+            groupCount: data.existingAppointmentGroupCount || 1,
+          });
+          return;
+        }
+        return setFormError(data.message || 'Booking failed.');
+      }
+      const createdList = Array.isArray(data) ? data : [data];
+      setAppointments(prev => [...createdList, ...prev]);
       setShowModal(false);
-      setPurpose(''); setSelectedDate(''); setSelectedTime(''); setNote('');
+      setShowReissueBlock(false);
+      setPurpose(''); setPurposes([]); setSelectedDate(''); setSelectedTime(''); setNote('');
       setSelectedTimePeriod(''); setBookingStep(1);
+      setReissueBlockInfo(null); setReissueConflicts([]);
+      setReissueReason(''); setReissueOtherText('');
+      setReissueReasonsByPurpose({}); setReissueOtherTextByPurpose({});
+      setReissueError('');
       setSlotRefreshKey(prev => prev + 1);
-      showToast('Appointment booked successfully!');
+      showToast(
+        reissuePayloads && reissuePayloads.length
+          ? (createdList.length > 1
+              ? `${createdList.length} appointments booked. Your repeat document request(s) are pending admin review.`
+              : 'Request submitted! It is pending admin review since you already have a valid document on file.')
+          : (createdList.length > 1
+              ? `${createdList.length} appointments booked successfully!`
+              : 'Appointment booked successfully!')
+      );
     } catch {
       setFormError('Unable to connect to the server.');
     } finally {
@@ -537,7 +615,139 @@ export default function UserAppointments() {
     }
   };
 
+  // Finds the most recent, non-cancelled appointment for the given purpose
+  // that falls within the last CLEARANCE_VALIDITY_MONTHS months and has been
+  // Released (i.e. the admin confirmed the document was actually handed to
+  // the resident). Used for both Barangay Clearance and Indigency
+  // Certificate. Scheduled / Pending Review appointments haven't been
+  // processed yet, so they never trigger the reissue soft-block — nor do
+  // Denied/Cancelled/Closed, since those never resulted in an issued document.
+  const findRecentIssuance = (purposeName) => {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - CLEARANCE_VALIDITY_MONTHS);
+    return appointments
+      .filter(a => a.purpose === purposeName && a.status === 'Released' && !a.cancelled && a.rawDate)
+      .filter(a => new Date(`${a.rawDate}T00:00:00`) >= cutoff)
+      .sort((a, b) => new Date(b.rawDate) - new Date(a.rawDate))[0] || null;
+  };
+
+  const togglePurpose = (p) => {
+    setPurposes(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+  };
+
+  const handleSubmit = async () => {
+    if (!purposes.length) return setFormError('Please select at least one purpose.');
+    if (!selectedDate)    return setFormError('Please pick a date.');
+    if (!selectedTime)    return setFormError('Please pick a time slot.');
+    setFormError('');
+
+    // Check every reissuable purpose the resident selected. If more than one
+    // is due for renewal, they're all confirmed together in one combined modal.
+    const conflicts = REISSUABLE_PURPOSES
+      .filter(p => purposes.includes(p))
+      .map(p => ({ purpose: p, recent: findRecentIssuance(p) }))
+      .filter(c => c.recent);
+
+    if (conflicts.length === 1) {
+      const [only] = conflicts;
+      setReissueSource('booking');
+      setReissueConflicts([]);
+      setReissueBlockInfo({ purpose: only.purpose, date: only.recent.date, rawDate: only.recent.rawDate, status: only.recent.status });
+      setReissueReason('');
+      setReissueOtherText('');
+      setReissueError('');
+      setShowReissueBlock(true);
+      return;
+    }
+
+    if (conflicts.length > 1) {
+      setReissueSource('booking');
+      setReissueBlockInfo(null);
+      setReissueConflicts(conflicts);
+      setReissueReasonsByPurpose({});
+      setReissueOtherTextByPurpose({});
+      setReissueError('');
+      setShowReissueBlock(true);
+      return;
+    }
+
+    submitBooking();
+  };
+
+  const handleReissueSubmit = () => {
+    const finish = reissueSource === 'reschedule' ? submitReschedule : submitBooking;
+
+    // Multi-conflict case: each conflicting purpose picks its own reason.
+    if (reissueConflicts.length) {
+      for (const c of reissueConflicts) {
+        const r = reissueReasonsByPurpose[c.purpose];
+        if (!r) return setReissueError(`Please select a reason for ${c.purpose}.`);
+        if (r === 'Others' && !(reissueOtherTextByPurpose[c.purpose] || '').trim()) {
+          return setReissueError(`Please describe your reason for ${c.purpose}.`);
+        }
+      }
+      setReissueError('');
+      const payloads = reissueConflicts.map(c => ({
+        purpose: c.purpose,
+        previousClearanceDate: c.recent.rawDate || '',
+        reason: reissueReasonsByPurpose[c.purpose],
+        otherText: (reissueOtherTextByPurpose[c.purpose] || '').trim(),
+      }));
+      finish(payloads);
+      return;
+    }
+
+    // Single-conflict case
+    if (!reissueReason) return setReissueError('Please select a reason.');
+    if (reissueReason === 'Others' && !reissueOtherText.trim()) {
+      return setReissueError('Please describe your reason.');
+    }
+    setReissueError('');
+
+    const entry = {
+      purpose: reissueBlockInfo?.purpose,
+      previousClearanceDate: reissueBlockInfo?.rawDate || '',
+      reason: reissueReason,
+      otherText: reissueOtherText.trim(),
+    };
+    finish([entry]);
+  };
+
+
+  // Mirrors the backend's single-active-appointment rule (see POST
+  // /appointments) so we can catch it BEFORE opening the booking modal,
+  // instead of letting the resident fill out the whole form and only then
+  // finding out it will be rejected. "Upcoming" = not cancelled, not yet
+  // closed/denied/released, and its date/time hasn't passed.
+  const findExistingUpcomingAppointment = () => {
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const nowTimeStr = now.toTimeString().slice(0, 5);
+    return appointments
+      .filter(a =>
+        !a.cancelled &&
+        ['Scheduled', 'Pending Review'].includes(a.status) &&
+        a.rawDate &&
+        (a.rawDate > todayStr || (a.rawDate === todayStr && a.rawTime >= nowTimeStr))
+      )
+      .sort((a, b) => (a.rawDate + a.rawTime).localeCompare(b.rawDate + b.rawTime))[0] || null;
+  };
+
   const openBookModal = () => {
+    // If the resident already has an active upcoming appointment, don't
+    // open the booking form at all — show it to them directly and let
+    // them reschedule instead of trying (and failing) to book a new one.
+    const existing = findExistingUpcomingAppointment();
+    if (existing) {
+      const groupCount = appointments.filter(a =>
+        !a.cancelled &&
+        a.rawDate === existing.rawDate &&
+        a.rawTime === existing.rawTime
+      ).length;
+      setExistingApptConflict({ ...existing, groupCount });
+      return;
+    }
+
     const d = new Date();
     setCalMonth({ year: d.getFullYear(), month: d.getMonth() });
     setSelectedDate('');
@@ -545,6 +755,15 @@ export default function UserAppointments() {
     setSelectedTimePeriod('');
     setBookingStep(1);
     setFormError('');
+    setPurposes([]);
+    setShowReissueBlock(false);
+    setReissueBlockInfo(null);
+    setReissueConflicts([]);
+    setReissueReason('');
+    setReissueOtherText('');
+    setReissueReasonsByPurpose({});
+    setReissueOtherTextByPurpose({});
+    setReissueError('');
     setShowModal(true);
   };
 
@@ -571,9 +790,33 @@ export default function UserAppointments() {
     }
   };
 
+  // Bridges the "Existing Appointment Found" conflict dialog into the
+  // reschedule flow, so the resident can update their existing appointment
+  // instead of trying to book a second one.
+  const handleUpdateExistingAppointment = () => {
+    const appt = existingApptConflict;
+    setExistingApptConflict(null);
+    if (appt) openReschedule(appt);
+  };
+
   /* ── Reschedule ── */
+  // When a resident booked several purposes/documents in one action, they
+  // share the same date/time. Rescheduling one must move all of them, so we
+  // compute the sibling group here purely for display purposes — the
+  // backend independently finds and moves the real group.
+  const [rescheduleGroup, setRescheduleGroup] = useState([]);
+
   const openReschedule = appt => {
     setRescheduleTarget(appt);
+    const siblings = appointments.filter(a =>
+      a.rawDate === appt.rawDate &&
+      a.rawTime === appt.rawTime &&
+      !a.cancelled &&
+      a.status !== 'Closed' && a.status !== 'Cancelled'
+    );
+    const group = siblings.length ? siblings : [appt];
+    setRescheduleGroup(group);
+    setRsPurposes([...new Set(group.map(a => a.purpose))]);
     const d = new Date();
     setRsCalMonth({ year: d.getFullYear(), month: d.getMonth() });
     setRsDate('');
@@ -581,31 +824,99 @@ export default function UserAppointments() {
     setRescheduleError('');
   };
 
+  const toggleRsPurpose = (p) => {
+    setRsPurposes(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+  };
+
   const handleReschedule = async () => {
     if (!rsDate) return setRescheduleError('Please pick a new date.');
     if (!rsTime) return setRescheduleError('Please pick a time slot.');
+    if (!rsPurposes.length) return setRescheduleError('Please keep at least one document selected.');
+    setRescheduleError('');
+
+    // Only newly-added purposes can trigger the reissue soft-block — ones
+    // already in the group were presumably already cleared when first booked.
+    const originalPurposes = new Set(rescheduleGroup.map(a => a.purpose));
+    const addedPurposes = rsPurposes.filter(p => !originalPurposes.has(p));
+
+    const conflicts = REISSUABLE_PURPOSES
+      .filter(p => addedPurposes.includes(p))
+      .map(p => ({ purpose: p, recent: findRecentIssuance(p) }))
+      .filter(c => c.recent);
+
+    if (conflicts.length === 1) {
+      const [only] = conflicts;
+      setReissueSource('reschedule');
+      setReissueConflicts([]);
+      setReissueBlockInfo({ purpose: only.purpose, date: only.recent.date, rawDate: only.recent.rawDate, status: only.recent.status });
+      setReissueReason('');
+      setReissueOtherText('');
+      setReissueError('');
+      setShowReissueBlock(true);
+      return;
+    }
+
+    if (conflicts.length > 1) {
+      setReissueSource('reschedule');
+      setReissueBlockInfo(null);
+      setReissueConflicts(conflicts);
+      setReissueReasonsByPurpose({});
+      setReissueOtherTextByPurpose({});
+      setReissueError('');
+      setShowReissueBlock(true);
+      return;
+    }
+
+    submitReschedule();
+  };
+
+  const submitReschedule = async (reissuePayloads = null) => {
     setRescheduling(true);
     try {
       const res = await fetch(`${API_URL}/appointments/${rescheduleTarget._id}/reschedule`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ date: rsDate, time: rsTime }),
+        body: JSON.stringify({
+          date: rsDate, time: rsTime, purposes: rsPurposes,
+          ...(reissuePayloads && reissuePayloads.length ? { reissueRequests: reissuePayloads } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) return setRescheduleError(data.message || 'Reschedule failed.');
-      setAppointments(prev => prev.map(a => a._id === data._id ? data : a));
+      // Backend returns every document touched by the change — kept docs
+      // moved to the new date/time, newly added docs, and any removed
+      // (cancelled) docs — so update all of them in state.
+      const updatedList = Array.isArray(data) ? data : [data];
+      const updatedIds = new Set(updatedList.map(a => a._id));
+      setAppointments(prev => [
+        ...updatedList,
+        ...prev.filter(a => !updatedIds.has(a._id)),
+      ]);
       setSlotRefreshKey(prev => prev + 1);
-      showToast('Appointment rescheduled successfully!');
+      const activeCount = updatedList.filter(a => !a.cancelled).length;
+      showToast(
+        activeCount > 1
+          ? `${activeCount} appointments rescheduled successfully!`
+          : 'Appointment rescheduled successfully!'
+      );
       setRescheduleTarget(null);
+      setRescheduleGroup([]);
+      setRsPurposes([]);
+      setShowReissueBlock(false);
+      setReissueBlockInfo(null); setReissueConflicts([]);
+      setReissueReason(''); setReissueOtherText('');
+      setReissueReasonsByPurpose({}); setReissueOtherTextByPurpose({});
+      setReissueError('');
     } catch {
       setRescheduleError('Unable to connect to the server.');
+      setReissueError('Unable to connect to the server.');
     } finally {
       setRescheduling(false);
     }
   };
 
   /* ── Filter & Pagination ── */
-  const filters   = ['All', 'Scheduled', 'Closed', 'Cancelled'];
+  const filters   = ['All', 'Scheduled', 'Released', 'Closed', 'Cancelled'];
   const displayed = appointments.filter(a => {
     const matchFilter = filter === 'All' || a.status === filter;
     const q = search.trim().toLowerCase();
@@ -856,6 +1167,9 @@ export default function UserAppointments() {
                               {appt.cancelReason}
                             </div>
                           )}
+                          {appt.status === 'Denied' && appt.cancelReason && (
+                            <div className="uapt-denial-reason">{appt.cancelReason}</div>
+                          )}
                         </td>
                         <td className="uapt-menu-cell" onClick={e => e.stopPropagation()}>
                           <button
@@ -886,17 +1200,6 @@ export default function UserAppointments() {
                               </button>
                               {appt.status === 'Scheduled' && (
                                 <>
-                                  <div className="uapt-dropdown__divider" />
-                                  <button
-                                    className="uapt-dropdown__item uapt-dropdown__item--reschedule"
-                                    onClick={() => { openReschedule(appt); setOpenMenu(null); }}
-                                  >
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-                                      <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
-                                      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-                                    </svg>
-                                    Reschedule
-                                  </button>
                                   <div className="uapt-dropdown__divider" />
                                   <button
                                     className="uapt-dropdown__item uapt-dropdown__item--cancel"
@@ -973,15 +1276,6 @@ export default function UserAppointments() {
                               {appt.status === 'Scheduled' && (
                                 <>
                                   <div className="uapt-dropdown__divider" />
-                                  <button className="uapt-dropdown__item uapt-dropdown__item--reschedule"
-                                    onClick={() => { openReschedule(appt); setOpenMenu(null); }}>
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-                                      <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
-                                      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-                                    </svg>
-                                    Reschedule
-                                  </button>
-                                  <div className="uapt-dropdown__divider" />
                                   <button className="uapt-dropdown__item uapt-dropdown__item--cancel"
                                     onClick={() => { setCancelTarget(appt); setOpenMenu(null); }}>
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
@@ -1030,6 +1324,9 @@ export default function UserAppointments() {
                           {appt.cancelReason}
                         </div>
                       )}
+                      {appt.status === 'Denied' && appt.cancelReason && (
+                        <div className="uapt-denial-reason">{appt.cancelReason}</div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1074,11 +1371,19 @@ export default function UserAppointments() {
               <div className="uapt-modal__body uapt-book-one-panel">
                 <div className="uapt-book-details">
                   <div className="uapt-form-group">
-                    <label>Purpose</label>
-                    <select value={purpose} onChange={e => setPurpose(e.target.value)}>
-                      <option value="">Select purpose...</option>
-                      {PURPOSE.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                    <label>Purpose <span>select one or more</span></label>
+                    <div className="uapt-purpose-checks">
+                      {PURPOSE.map(p => (
+                        <label key={p} className="uapt-purpose-check">
+                          <input
+                            type="checkbox"
+                            checked={purposes.includes(p)}
+                            onChange={() => togglePurpose(p)}
+                          />
+                          <span>{p}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="uapt-form-group">
@@ -1107,8 +1412,6 @@ export default function UserAppointments() {
                       <span>Choose a date to see all available and blocked times.</span>
                     )}
                   </div>
-
-                  {formError && <p className="uapt-form-error">{formError}</p>}
                 </div>
 
                 <div className="uapt-book-calendar">
@@ -1131,13 +1434,141 @@ export default function UserAppointments() {
               </div>
 
               <div className="uapt-modal__footer">
+                {formError && <p className="uapt-form-error">{formError}</p>}
                 <button className="uapt-ghost-btn" onClick={() => setShowModal(false)}>Cancel</button>
                 <button
                   className="uapt-submit-btn"
                   onClick={handleSubmit}
-                  disabled={submitting || !purpose || !selectedDate || !selectedTime}
+                  disabled={submitting || !purposes.length || !selectedDate || !selectedTime}
                 >
                   {submitting ? 'Booking...' : 'Book Appointment'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════
+            BARANGAY CLEARANCE RE-ISSUANCE SOFT-BLOCK
+        ════════════════════════ */}
+        {showReissueBlock && (
+          <div className="uapt-overlay uapt-overlay--elevated" onClick={() => setShowReissueBlock(false)}>
+            <div className="uapt-modal uapt-modal--book" onClick={e => e.stopPropagation()}>
+              <div className="uapt-modal__header">
+                <h2>
+                  {reissueConflicts.length > 1
+                    ? 'Documents Already Issued'
+                    : `${reissueBlockInfo?.purpose} Already Issued`}
+                </h2>
+                <button className="uapt-modal__close" onClick={() => setShowReissueBlock(false)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="uapt-modal__body">
+                {reissueConflicts.length > 1 ? (
+                  <>
+                    <p className="uapt-reissue-notice">
+                      Some of your selected documents have already been issued recently. Please provide a reason for requesting them again.
+                    </p>
+
+                    {reissueConflicts.map(c => (
+                      <div className="uapt-reissue-purpose-block" key={c.purpose}>
+                        <p className="uapt-reissue-purpose-label">
+                          <strong>{c.purpose}</strong> — issued on {c.recent.date}
+                        </p>
+
+                        <div className="uapt-reissue-options">
+                          {REISSUE_REASONS.map(r => (
+                            <label key={r} className="uapt-reissue-option">
+                              <input
+                                type="radio"
+                                name={`reissueReason-${c.purpose}`}
+                                value={r}
+                                checked={reissueReasonsByPurpose[c.purpose] === r}
+                                onChange={() => setReissueReasonsByPurpose(prev => ({ ...prev, [c.purpose]: r }))}
+                              />
+                              <span>{r}</span>
+                            </label>
+                          ))}
+                        </div>
+
+                        <div className="uapt-form-group">
+                          <label>
+                            Additional Details {reissueReasonsByPurpose[c.purpose] === 'Others' ? '' : <span style={{ fontWeight: 400, color: '#9ca3af' }}>(optional)</span>}
+                          </label>
+                          <textarea
+                            rows={2}
+                            placeholder={
+                              reissueReasonsByPurpose[c.purpose] === 'Others'
+                                ? 'Please specify your reason...'
+                                : 'Add any details that might help the admin review your request...'
+                            }
+                            value={reissueOtherTextByPurpose[c.purpose] || ''}
+                            onChange={e => setReissueOtherTextByPurpose(prev => ({ ...prev, [c.purpose]: e.target.value }))}
+                            autoFocus={reissueReasonsByPurpose[c.purpose] === 'Others'}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <p className="uapt-reissue-notice">
+                      A {reissueBlockInfo?.purpose} was already issued on <strong>{reissueBlockInfo?.date}</strong>.
+                      {' '}It falls within the six (6) month validity window.
+                    </p>
+                    <p className="uapt-reissue-subtext">
+                      If you still need to book another {reissueBlockInfo?.purpose}, please provide a reason for your request.
+                    </p>
+
+                    <div className="uapt-reissue-options">
+                      {REISSUE_REASONS.map(r => (
+                        <label key={r} className="uapt-reissue-option">
+                          <input
+                            type="radio"
+                            name="reissueReason"
+                            value={r}
+                            checked={reissueReason === r}
+                            onChange={() => setReissueReason(r)}
+                          />
+                          <span>{r}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="uapt-form-group">
+                      <label>
+                        Additional Details {reissueReason === 'Others' ? '' : <span style={{ fontWeight: 400, color: '#9ca3af' }}>(optional)</span>}
+                      </label>
+                      <textarea
+                        rows={2}
+                        placeholder={
+                          reissueReason === 'Others'
+                            ? 'Please specify your reason...'
+                            : 'Add any details that might help the admin review your request...'
+                        }
+                        value={reissueOtherText}
+                        onChange={e => setReissueOtherText(e.target.value)}
+                        autoFocus={reissueReason === 'Others'}
+                      />
+                    </div>
+                  </>
+                )}
+
+              </div>
+
+              <div className="uapt-modal__footer">
+                {reissueError && <p className="uapt-form-error">{reissueError}</p>}
+                <button className="uapt-ghost-btn" onClick={() => setShowReissueBlock(false)}>Cancel</button>
+                <button
+                  className="uapt-submit-btn"
+                  onClick={handleReissueSubmit}
+                  disabled={reissueSource === 'reschedule' ? rescheduling : submitting}
+                >
+                  {(reissueSource === 'reschedule' ? rescheduling : submitting) ? 'Submitting...' : 'Submit'}
                 </button>
               </div>
             </div>
@@ -1376,14 +1807,12 @@ export default function UserAppointments() {
                       }}
                     />
 
-                    {formError && (
-                      <p style={{ color: '#dc2626', fontSize: 13, fontWeight: 500, marginTop: 12, margin: 0 }}>{formError}</p>
-                    )}
                   </div>
                 )}
               </div>
 
               <div className="uapt-modal__footer">
+                {formError && <p className="uapt-form-error">{formError}</p>}
                 <button
                   className="uapt-ghost-btn"
                   onClick={() => {
@@ -1422,6 +1851,45 @@ export default function UserAppointments() {
                   disabled={submitting}
                 >
                   {bookingStep === 4 ? (submitting ? 'Confirming…' : 'Confirm Appointment') : 'Next'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Existing Appointment Found Modal ── */}
+        {existingApptConflict && (
+          <div className="uapt-overlay" onClick={() => setExistingApptConflict(null)}>
+            <div className="uapt-modal uapt-modal--sm" onClick={e => e.stopPropagation()}>
+              <div className="uapt-confirm-icon uapt-confirm-icon--blue">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" width="24" height="24">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16" r="0.5" fill="#2563eb"/>
+                </svg>
+              </div>
+              <div className="uapt-modal__header" style={{ border: 'none', paddingTop: 0 }}>
+                <h2>Existing Appointment Found</h2>
+                <button className="uapt-modal__close" onClick={() => setExistingApptConflict(null)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              <div className="uapt-modal__body" style={{ gap: 0, paddingTop: 0 }}>
+                <p style={{ fontSize: 14, color: '#374151', margin: 0, lineHeight: 1.6 }}>
+                  You already have an upcoming <strong>{existingApptConflict.purpose}</strong> appointment
+                  on <strong>{existingApptConflict.date}</strong> at{' '}
+                  <strong>{existingApptConflict.time}</strong>
+                  {existingApptConflict.groupCount > 1
+                    ? ` (covering ${existingApptConflict.groupCount} documents)`
+                    : ''}
+                  . You can only have one active appointment at a time — reschedule it if you'd like a different date or time.
+                </p>
+              </div>
+              <div className="uapt-modal__footer">
+                <button className="uapt-ghost-btn" onClick={() => setExistingApptConflict(null)}>Close</button>
+                <button className="uapt-submit-btn" onClick={handleUpdateExistingAppointment}>
+                  Reschedule
                 </button>
               </div>
             </div>
@@ -1478,11 +1946,32 @@ export default function UserAppointments() {
               </div>
               <div className="uapt-modal__body">
                 <p className="uapt-reschedule-desc">
-                  Choose a new date and time for your <strong>{rescheduleTarget.purpose}</strong> appointment.
-                  It will return to{' '}
-                  <span className="uapt-badge us--scheduled" style={{ fontSize: 11, padding: '2px 8px' }}>Scheduled</span>{' '}
-                  status.
+                  {rescheduleGroup.length > 1 ? (
+                    <>
+                      Choose a new date and time for your{' '}
+                      <strong>{formatPurposeList(rescheduleGroup.map(a => a.purpose))}</strong> appointments.
+                      All {rescheduleGroup.length} documents booked for this slot will move together.
+                    </>
+                  ) : (
+                    <>Choose a new date and time for your <strong>{rescheduleTarget.purpose}</strong> appointment.</>
+                  )}
                 </p>
+
+                <div className="uapt-form-group">
+                  <label>Documents <span>add or remove what you need</span></label>
+                  <div className="uapt-purpose-checks">
+                    {PURPOSE.map(p => (
+                      <label key={p} className="uapt-purpose-check">
+                        <input
+                          type="checkbox"
+                          checked={rsPurposes.includes(p)}
+                          onChange={() => toggleRsPurpose(p)}
+                        />
+                        <span>{p}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="uapt-form-group">
                   <label>Pick a New Date &amp; Time</label>
@@ -1510,13 +1999,11 @@ export default function UserAppointments() {
                   </div>
                 )}
 
-                {rescheduleError && (
-                  <p style={{ color: '#dc2626', fontSize: 13, fontWeight: 500, margin: 0 }}>{rescheduleError}</p>
-                )}
               </div>
               <div className="uapt-modal__footer">
+                {rescheduleError && <p className="uapt-form-error">{rescheduleError}</p>}
                 <button className="uapt-ghost-btn" onClick={() => setRescheduleTarget(null)}>Go Back</button>
-                <button className="uapt-submit-btn" onClick={handleReschedule} disabled={rescheduling}>
+                <button className="uapt-submit-btn" onClick={handleReschedule} disabled={rescheduling || !rsPurposes.length}>
                   {rescheduling ? 'Saving…' : 'Confirm Reschedule'}
                 </button>
               </div>

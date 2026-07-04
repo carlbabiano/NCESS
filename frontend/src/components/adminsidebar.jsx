@@ -282,7 +282,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                     className={`sidebar__submenu-item${location.pathname === '/adminprofilerequest' ? ' sidebar__submenu-item--active' : ''}`}
                     onClick={() => handleNav('/adminprofilerequest')}
                   >
-                    Profile Update Request
+                    Profile Update Requests
                   </button>
                 </div>
               )}

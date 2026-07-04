@@ -16,16 +16,32 @@ const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const STATUS_META = {
   Scheduled: { className: 'status--scheduled', label: 'Scheduled' },
+  'Pending Review': { className: 'status--pending-review', label: 'Pending Review' },
+  Denied:    { className: 'status--denied',    label: 'Denied' },
   Closed:    { className: 'status--closed',    label: 'Closed' },
   Cancelled: { className: 'status--cancelled', label: 'Cancelled' },
+  Released:  { className: 'status--released',  label: 'Released' },
 };
+
+function addMonthsToDateStr(dateStr, months) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const dt = new Date(y, m - 1 + months, d);
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fmtDateTimeShort(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+    ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
 
 const STAFF_OPTIONS   = ['Unassigned', 'Admin Rose', 'Capt. Garcia', 'Nurse Anna'];
 const PURPOSE_OPTIONS = [
-  'Barangay Clearance', 'Business Permit', 'Cedula Issuance',
-  'Financial Assistance', 'Health Certificate', 'Indigency Certificate',
-  'Barangay ID', 'Complaint Filing', 'Senior ID Renewal',
-  'Senior Citizen ID', 'PWD ID', 'Other',
+  'Barangay Clearance', 'Indigency Certificate',
 ];
 
 const EMPTY_FORM = {
@@ -157,6 +173,11 @@ export default function AdminAppointments() {
   const [deleting,     setDeleting]     = useState(false);
   const [toast,        setToast]        = useState('');
   const [detailsAppt,  setDetailsAppt]  = useState(null);
+  const [reissueDenyTarget, setReissueDenyTarget] = useState(null);
+  const [reissueDenyNote,   setReissueDenyNote]   = useState('');
+  const [reissueActingId,   setReissueActingId]   = useState(null);
+  const [reissueDetailAppt, setReissueDetailAppt] = useState(null); // appt shown in the "View More" details modal
+  const [releasingId,       setReleasingId]       = useState(null);
   const [qrModalAppt,  setQrModalAppt]  = useState(null);
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [qrScanStatus, setQrScanStatus] = useState('idle');
@@ -605,6 +626,21 @@ export default function AdminAppointments() {
       );
     });
 
+    // Grouped reschedule: a resident booked several purposes/documents in
+    // one action and rescheduled them all together, so the backend sends
+    // the whole updated set in a single event instead of one at a time.
+    socket.on('appointments_updated', (apptList) => {
+      if (!Array.isArray(apptList) || !apptList.length) return;
+      const updatedMap = new Map(apptList.map(a => [a._id, a]));
+      setAppointments(prev => prev.map(a => updatedMap.get(a._id) || a));
+      // Patch the confirm-action modal if it's open for any of these
+      setConfirmAction(prev => {
+        if (!prev) return prev;
+        const updated = updatedMap.get(prev.appt._id);
+        return updated ? { ...prev, appt: updated } : prev;
+      });
+    });
+
     // Appointment deleted from another admin tab
     socket.on('appointment_deleted', ({ _id }) => {
       setAppointments(prev => prev.filter(a => a._id !== _id));
@@ -817,7 +853,8 @@ export default function AdminAppointments() {
     showToast('Block updated - remember to save!');
   };
 
-  const filters = ['All', 'Scheduled', 'Closed', 'Cancelled'];
+  const pendingReviewCount = appointments.filter(a => a.status === 'Pending Review').length;
+  const filters = ['All', 'Scheduled', 'Pending Review', 'Denied', 'Released', 'Closed', 'Cancelled'];
   const filtered = appointments.filter(a => {
     const matchFilter = filter === 'All' || a.status === filter;
     const q = search.toLowerCase();
@@ -831,7 +868,7 @@ export default function AdminAppointments() {
   useEffect(() => { setPage(1); }, [search, filter]);
 
   // Status sort order: Scheduled first, then Closed, then Cancelled
-  const STATUS_ORDER = { Scheduled: 0, Closed: 1, Cancelled: 2 };
+  const STATUS_ORDER = { 'Pending Review': -1, Denied: 0, Scheduled: 1, Released: 2, Closed: 3, Cancelled: 4 };
 
   // Sort a single appointment's date+time into a numeric value for comparison
   const apptSortKey = (appt) => {
@@ -934,6 +971,63 @@ export default function AdminAppointments() {
     }
   };
 
+  /* ── Reissue request review ── */
+  const submitReissueDecision = async (appt, decision, reviewNote = '') => {
+    setReissueActingId(appt._id);
+    try {
+      const res = await fetch(`${API_URL}/admin/appointments/${appt._id}/review-reissue`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ decision, reviewNote }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Unable to update request.'); return false; }
+      setAppointments(prev => prev.map(a => a._id === appt._id ? data : a));
+      showToast(decision === 'Approved' ? 'Request approved and scheduled.' : 'Request denied.');
+      return true;
+    } catch {
+      showToast('Unable to connect to server.');
+      return false;
+    } finally {
+      setReissueActingId(null);
+    }
+  };
+
+  const handleApproveReissue = (appt) => submitReissueDecision(appt, 'Approved');
+
+  /* ── Mark as Released ── */
+  // Admin confirms the document was physically handed over to the resident.
+  // This is what starts the 6-month validity window on the resident side.
+  const handleMarkReleased = async (appt) => {
+    setReleasingId(appt._id);
+    try {
+      const res = await fetch(`${API_URL}/admin/appointments/${appt._id}/release`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.message || 'Unable to mark as released.');
+      setAppointments(prev => prev.map(a => a._id === appt._id ? data : a));
+      showToast(`${appt.purpose} marked as Released.`);
+    } catch {
+      showToast('Unable to connect to server.');
+    } finally {
+      setReleasingId(null);
+    }
+  };
+
+  const openDenyReissue = (appt) => {
+    setReissueDenyTarget(appt);
+    setReissueDenyNote('');
+  };
+
+  const handleDenyReissue = async () => {
+    if (!reissueDenyTarget || !reissueDenyNote.trim()) return;
+    await submitReissueDecision(reissueDenyTarget, 'Denied', reissueDenyNote.trim());
+    setReissueDenyTarget(null);
+    setReissueDenyNote('');
+  };
+
   /* ── Delete ── */
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -953,22 +1047,34 @@ export default function AdminAppointments() {
     }
   };
 
+  const isPendingReissue = (appt) => appt?.status === 'Pending Review' && Boolean(appt?.reissueRequest?.isReissue);
+
   const renderAppointmentActions = (appt) => (
-    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-      <button
-        className="appt-table__view-btn"
-        title="Show QR Code"
-        onClick={e => { e.stopPropagation(); openQrModal(appt); }}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="3" y="3" width="7" height="7" rx="1" />
-          <rect x="14" y="3" width="7" height="7" rx="1" />
-          <rect x="3" y="14" width="7" height="7" rx="1" />
-          <path d="M14 14h3v3" />
-          <path d="M21 14v7h-7" />
-          <path d="M17 17h4" />
-        </svg>
-      </button>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {isPendingReissue(appt) ? (
+        <button
+          type="button"
+          className="appt-table__viewmore-btn"
+          onClick={e => { e.stopPropagation(); setReissueDetailAppt(appt); }}
+        >
+          View More
+        </button>
+      ) : appt.status === 'Scheduled' ? (
+        <button
+          type="button"
+          className="appt-table__release-btn"
+          title="Mark as Released"
+          disabled={releasingId === appt._id}
+          onClick={e => { e.stopPropagation(); handleMarkReleased(appt); }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          {releasingId === appt._id ? 'Releasing…' : 'Release'}
+        </button>
+      ) : (
+        <span className="appt-table__no-action">—</span>
+      )}
     </div>
   );
 
@@ -1013,7 +1119,7 @@ export default function AdminAppointments() {
   /* ── Create appointment ── */
   const handleSubmit = async () => {
     if (!form.resident.trim()) return setFormError('Resident name is required.');
-    const purposeVal = form.purpose === 'Other' ? form.customPurpose.trim() : form.purpose;
+    const purposeVal = form.purpose;
     if (!purposeVal) return setFormError('Purpose is required.');
     if (!form.date)  return setFormError('Date is required.');
     if (!form.time)  return setFormError('Time is required.');
@@ -1188,7 +1294,11 @@ export default function AdminAppointments() {
                   onChange: setFilter,
                   options: filters,
                 }]}
-                count={`Showing ${filtered.length} appointments`}
+                count={
+                  pendingReviewCount > 0
+                    ? `Showing ${filtered.length} appointments · ${pendingReviewCount} pending review`
+                    : `Showing ${filtered.length} appointments`
+                }
               />
 
               {loading && (
@@ -1227,7 +1337,10 @@ export default function AdminAppointments() {
                             <tr className={`appt-table__row${extras.length > 0 ? ' appt-table__row--group' : ''}`}>
                               <td className="appt-table__unique">
                                 {extras.length > 0 ? null : (
-                                  <span className="appt-unique-id">{getAppointmentUniqueId(primary)}</span>
+                                  <>
+                                    <span className="appt-unique-id">{getAppointmentUniqueId(primary)}</span>
+                                    {renderAppointmentQrButton(primary)}
+                                  </>
                                 )}
                               </td>
                               <td className="appt-table__resident">
@@ -1311,6 +1424,7 @@ export default function AdminAppointments() {
                                       <div key={appt._id} className="appt-appointment-item">
                                         <div className="appt-appointment-item__unique">
                                           <span className="appt-unique-id">{getAppointmentUniqueId(appt)}</span>
+                                          {renderAppointmentQrButton(appt)}
                                         </div>
                                         <div className="appt-appointment-item__resident-spacer" />
                                         <div className="appt-appointment-item__datetime">
@@ -1355,6 +1469,7 @@ export default function AdminAppointments() {
                             <div className="appt-card__resident">
                               <span className="appt-card__unique">
                                 <span className="appt-unique-id">{getAppointmentUniqueId(appt)}</span>
+                                {renderAppointmentQrButton(appt)}
                               </span>
                               <span className="appt-card__name">{appt.resident}</span>
                               {appt.residentEmail && (
@@ -2369,11 +2484,6 @@ export default function AdminAppointments() {
                       <option value="">Select a purpose...</option>
                       {PURPOSE_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
-                    {form.purpose === 'Other' && (
-                      <input className="appt-form-input" style={{ marginTop: 8 }}
-                        type="text" placeholder="Describe the purpose..."
-                        value={form.customPurpose} onChange={e => handleChange('customPurpose', e.target.value)} />
-                    )}
                   </div>
                   <div className="appt-form-group" style={{ flex: 1 }}>
                     <label className="appt-form-label">Assigned To</label>
@@ -2459,6 +2569,139 @@ export default function AdminAppointments() {
             </div>
           );
         })()}
+
+        {/* ── Reissue Request Details Modal (opened via "View More") ── */}
+        {reissueDetailAppt && (
+          <div className="appt-modal-overlay" onClick={() => setReissueDetailAppt(null)}>
+            <div className="appt-modal appt-reissue-detail-modal" onClick={e => e.stopPropagation()}>
+              <div className="appt-modal__header">
+                <div className="appt-reissue-detail-heading">
+                  <div className="appt-reissue-panel__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                      <line x1="12" y1="9" x2="12" y2="13"/>
+                      <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="appt-modal__title">Previous {reissueDetailAppt.purpose} Found</h2>
+                    <p className="appt-modal__subtitle">Review the repeat request before approving or denying.</p>
+                  </div>
+                </div>
+                <button className="appt-modal__close" onClick={() => setReissueDetailAppt(null)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="appt-reissue-detail-body">
+                <div className="appt-reissue-detail-id">
+                  <span className="appt-unique-id">{getAppointmentUniqueId(reissueDetailAppt)}</span>
+                  {renderAppointmentQrButton(reissueDetailAppt)}
+                </div>
+
+                <div className="appt-reissue-detail-grid">
+                  <div className="appt-reissue-panel__field">
+                    <span className="appt-reissue-panel__label">Previously Issued</span>
+                    <strong>{fmtDate(reissueDetailAppt.reissueRequest.previousClearanceDate)}</strong>
+                  </div>
+                  <div className="appt-reissue-panel__field">
+                    <span className="appt-reissue-panel__label">Valid Until</span>
+                    <strong>{addMonthsToDateStr(reissueDetailAppt.reissueRequest.previousClearanceDate, 6)}</strong>
+                  </div>
+                  <div className="appt-reissue-panel__field appt-reissue-detail-grid__full">
+                    <span className="appt-reissue-panel__label">Reason for New Request</span>
+                    <strong>{reissueDetailAppt.reissueRequest.reason}</strong>
+                  </div>
+                  <div className="appt-reissue-panel__field appt-reissue-detail-grid__full">
+                    <span className="appt-reissue-panel__label">Requested</span>
+                    <span className="appt-reissue-panel__requested">{fmtDateTimeShort(reissueDetailAppt.createdAt)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="appt-modal__footer">
+                <button
+                  className="appt-reissue-panel__deny"
+                  disabled={reissueActingId === reissueDetailAppt._id}
+                  onClick={() => {
+                    const appt = reissueDetailAppt;
+                    setReissueDetailAppt(null);
+                    openDenyReissue(appt);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                  Deny
+                </button>
+                <button
+                  className="appt-reissue-panel__approve"
+                  disabled={reissueActingId === reissueDetailAppt._id}
+                  onClick={async () => {
+                    const ok = await handleApproveReissue(reissueDetailAppt);
+                    if (ok) setReissueDetailAppt(null);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  {reissueActingId === reissueDetailAppt._id ? 'Working…' : 'Approve'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Deny Reissue Request Modal ── */}
+        {reissueDenyTarget && (
+          <div className="appt-modal-overlay" onClick={() => { setReissueDenyTarget(null); setReissueDenyNote(''); }}>
+            <div className="appt-confirm-modal appt-confirm-modal--cancel" onClick={e => e.stopPropagation()}>
+              <div className="appt-confirm-modal__icon appt-confirm-modal__icon--cancel">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                </svg>
+              </div>
+              <h3 className="appt-confirm-modal__title">Deny Reissue Request?</h3>
+              <p className="appt-confirm-modal__desc">
+                You are about to deny the repeat {reissueDenyTarget.purpose} request for{' '}
+                <strong>{reissueDenyTarget.resident}</strong>. Please provide a reason so the resident can be informed.
+              </p>
+              <div className="appt-cancel-note-wrap">
+                <label className="appt-cancel-note-label">
+                  Reason for Denial <span className="appt-form-required">*</span>
+                </label>
+                <textarea
+                  className="appt-cancel-note-textarea"
+                  placeholder="e.g. Prior clearance is still valid and no valid reason was given…"
+                  value={reissueDenyNote}
+                  onChange={e => setReissueDenyNote(e.target.value)}
+                  rows={3}
+                  disabled={reissueActingId === reissueDenyTarget._id}
+                />
+                <p className="appt-cancel-note-hint">This note will be visible to the resident.</p>
+              </div>
+              <div className="appt-confirm-modal__actions">
+                <button
+                  className="appt-modal__cancel"
+                  onClick={() => { setReissueDenyTarget(null); setReissueDenyNote(''); }}
+                  disabled={reissueActingId === reissueDenyTarget._id}
+                >
+                  Go Back
+                </button>
+                <button
+                  className="appt-confirm-modal__delete"
+                  onClick={handleDenyReissue}
+                  disabled={reissueActingId === reissueDenyTarget._id || !reissueDenyNote.trim()}
+                >
+                  {reissueActingId === reissueDenyTarget._id ? 'Denying…' : 'Yes, Deny Request'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Delete Confirm Modal ── */}
         {deleteTarget && (
