@@ -32,6 +32,7 @@
 .uapt-purpose{font-weight:600;color:#111827;}
 .uapt-date{font-size:13px;color:#374151;font-weight:500;margin:0 0 2px;}
 .uapt-time{font-size:12px;color:#9ca3af;margin:0;}
+.uapt-assigned{font-size:13px;color:#374151;font-weight:500;}
 .uapt-assigned{display:flex;align-items:center;gap:6px;font-size:13px;color:#374151;white-space:nowrap;}
 .uapt-assigned svg{width:14px;height:14px;stroke:#9ca3af;}
 .uapt-unassigned{color:#9ca3af;font-style:italic;}

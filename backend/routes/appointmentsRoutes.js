@@ -271,6 +271,9 @@ router.patch('/admin/appointments/:id/release', verifyAdmin, async (req, res) =>
       return res.status(400).json({ message: 'Only scheduled appointments can be marked as released.' });
     }
     doc.status = 'Released';
+    // Record which admin account performed the release so it shows up
+    // as "Assigned To" on both the admin and resident sides.
+    doc.assignedTo = [req.admin.firstName, req.admin.lastName].filter(Boolean).join(' ') || 'Admin';
     await doc.save();
     const serialized = serialize(doc);
     if (doc.userId) {

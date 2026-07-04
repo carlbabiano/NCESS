@@ -854,7 +854,7 @@ export default function AdminAppointments() {
   };
 
   const pendingReviewCount = appointments.filter(a => a.status === 'Pending Review').length;
-  const filters = ['All', 'Scheduled', 'Pending Review', 'Denied', 'Released', 'Closed', 'Cancelled'];
+  const filters = ['All', 'Scheduled', 'Released', 'Pending Review', 'Denied', 'Cancelled', 'Closed'];
   const filtered = appointments.filter(a => {
     const matchFilter = filter === 'All' || a.status === filter;
     const q = search.toLowerCase();
@@ -867,8 +867,9 @@ export default function AdminAppointments() {
 
   useEffect(() => { setPage(1); }, [search, filter]);
 
-  // Status sort order: Scheduled first, then Closed, then Cancelled
-  const STATUS_ORDER = { 'Pending Review': -1, Denied: 0, Scheduled: 1, Released: 2, Closed: 3, Cancelled: 4 };
+  // Status sort order: Scheduled first, Released next, then Pending Review,
+  // with Denied, Cancelled, Closed last (in that order)
+  const STATUS_ORDER = { Scheduled: 0, Released: 1, 'Pending Review': 2, Denied: 3, Cancelled: 4, Closed: 5 };
 
   // Sort a single appointment's date+time into a numeric value for comparison
   const apptSortKey = (appt) => {
@@ -881,8 +882,8 @@ export default function AdminAppointments() {
   // Within Scheduled: soonest upcoming first (ascending), then newest created last
   // Within Closed/Cancelled: most recent date first (descending)
   const sortedAppointments = [...filtered].sort((a, b) => {
-    const sa = STATUS_ORDER[a.status] ?? 3;
-    const sb = STATUS_ORDER[b.status] ?? 3;
+    const sa = STATUS_ORDER[a.status] ?? 6;
+    const sb = STATUS_ORDER[b.status] ?? 6;
     if (sa !== sb) return sa - sb;
     const ta = apptSortKey(a);
     const tb = apptSortKey(b);

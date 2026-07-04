@@ -1138,12 +1138,12 @@ export default function UserAppointments() {
                   <thead>
                     <tr>
                       <th>Appointment ID</th><th>Purpose</th><th>Date &amp; Time</th>
-                      <th>Status</th><th></th>
+                      <th>Assigned To</th><th>Status</th><th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginated.length === 0 && (
-                      <tr><td colSpan="4" className="uapt-empty">No appointments found.</td></tr>
+                      <tr><td colSpan="5" className="uapt-empty">No appointments found.</td></tr>
                     )}
                     {paginated.map(appt => (
                       <tr key={appt._id} className="uapt-row">
@@ -1153,6 +1153,7 @@ export default function UserAppointments() {
                           <p className="uapt-date">{appt.date}</p>
                           <p className="uapt-time">{appt.time}</p>
                         </td>
+                        <td><span className="uapt-assigned">{appt.assignedTo || 'Unassigned'}</span></td>
                         <td>
                           <span className={`uapt-badge ${STATUS_CLS[appt.status] || 'us--scheduled'}`}>
                             {appt.status}
