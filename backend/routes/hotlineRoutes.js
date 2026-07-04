@@ -1,6 +1,7 @@
 import express from "express";
 import jwt     from "jsonwebtoken";
 import { Message, Conversation } from "../models/hotline.js";
+import { generateAIReply } from "../services/geminiService.js";
 
 const router = express.Router();
 
@@ -140,6 +141,37 @@ router.post("/chat/conversations/:id/messages", requireUser, async (req, res) =>
       $inc: { unreadAdmin: 1 },
     });
 
+    // AI auto-reply, mirroring the socket path — only while no admin has taken over.
+    if (conv.mode !== "human") {
+      try {
+        const recentMessages = (await Message.find({ conversationId: req.params.id })
+          .sort({ createdAt: -1 })
+          .limit(20)).reverse();
+
+        const replyText = await generateAIReply(recentMessages);
+
+        const aiMsg = await Message.create({
+          conversationId: req.params.id,
+          sender:         "ai",
+          senderName:     "AI Assistant",
+          text:           replyText,
+          readByAdmin:    false,
+          readByUser:     true,
+        });
+
+        const aiUpdatedConv = await Conversation.findByIdAndUpdate(
+          req.params.id,
+          { lastMessage: replyText, lastMessageAt: new Date() },
+          { returnDocument: "after" }
+        );
+
+        req.app.get("io")?.to(`conv_${req.params.id}`).emit("new_message", aiMsg);
+        req.app.get("io")?.to("admin_room").emit("conversation_updated", aiUpdatedConv);
+      } catch (aiErr) {
+        console.error("AI reply error:", aiErr);
+      }
+    }
+
     res.status(201).json(msg);
   } catch (err) {
     console.error(err);
@@ -233,9 +265,70 @@ router.patch("/chat/admin/conversations/:id/read", requireAdmin, async (req, res
       { conversationId: req.params.id, sender: "user", readByAdmin: false },
       { readByAdmin: true }
     );
-    await Conversation.findByIdAndUpdate(req.params.id, { unreadAdmin: 0 });
+    const updatedConv = await Conversation.findByIdAndUpdate(
+      req.params.id,
+      { unreadAdmin: 0 },
+      { returnDocument: "after" }
+    );
+
+    // Let every admin-side listener (conversation list, sidebar badge, other
+    // admin tabs/devices) know this conversation's unread count is cleared.
+    if (updatedConv) {
+      req.app.get("io")?.to("admin_room").emit("conversation_updated", updatedConv);
+    }
+
     res.json({ message: "All user messages marked as read by admin." });
   } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// PATCH /api/chat/admin/conversations/:id/takeover — admin takes over from the AI
+router.patch("/chat/admin/conversations/:id/takeover", requireAdmin, async (req, res) => {
+  try {
+    const adminName = [req.admin.firstName, req.admin.lastName].filter(Boolean).join(" ") || "Admin";
+
+    const conv = await Conversation.findByIdAndUpdate(
+      req.params.id,
+      { mode: "human", takenOverBy: adminName, takenOverAt: new Date() },
+      { returnDocument: "after" }
+    );
+    if (!conv) return res.status(404).json({ message: "Conversation not found" });
+
+    req.app.get("io")?.to(`user_${conv.userId}`).emit("conversation_takeover", {
+      conversationId: conv._id,
+      mode:           "human",
+      takenOverBy:    adminName,
+    });
+    req.app.get("io")?.to("admin_room").emit("conversation_updated", conv);
+
+    res.json(conv);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// PATCH /api/chat/admin/conversations/:id/handback — return conversation to the AI
+router.patch("/chat/admin/conversations/:id/handback", requireAdmin, async (req, res) => {
+  try {
+    const conv = await Conversation.findByIdAndUpdate(
+      req.params.id,
+      { mode: "ai", takenOverBy: "", takenOverAt: null },
+      { returnDocument: "after" }
+    );
+    if (!conv) return res.status(404).json({ message: "Conversation not found" });
+
+    req.app.get("io")?.to(`user_${conv.userId}`).emit("conversation_takeover", {
+      conversationId: conv._id,
+      mode:           "ai",
+      takenOverBy:    "",
+    });
+    req.app.get("io")?.to("admin_room").emit("conversation_updated", conv);
+
+    res.json(conv);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });

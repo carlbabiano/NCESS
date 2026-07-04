@@ -128,6 +128,17 @@ export default function UserBarangaySupport() {
         return [...filtered, msg];
       });
       setAdminTyping(false);
+
+      // Resident is actively viewing this conversation — mark inbound replies
+      // (admin/AI) as read right away so the sidebar badge doesn't show a
+      // stale unread count while they're already looking at it.
+      if (msg.sender !== 'user') {
+        const t = getToken();
+        fetch(`${API}/chat/my-conversation/read`, {
+          method:  'PATCH',
+          headers: { Authorization: `Bearer ${t}` },
+        }).catch(() => {});
+      }
     });
 
     socket.on('user_typing', ({ isAdmin }) => {
@@ -135,6 +146,12 @@ export default function UserBarangaySupport() {
     });
 
     socket.on('user_stopped_typing', () => setAdminTyping(false));
+
+    socket.on('conversation_takeover', ({ conversationId, mode, takenOverBy }) => {
+      setConversation(prev => (prev && prev._id === conversationId)
+        ? { ...prev, mode, takenOverBy }
+        : prev);
+    });
 
     return () => socket.disconnect();
   }, []);
@@ -277,16 +294,17 @@ export default function UserBarangaySupport() {
                     ) : (
                       messages.map((msg) => {
                         const isMe = msg.sender === 'user';
+                        const isAI = msg.sender === 'ai';
                         return (
                           <div key={msg._id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', gap: 8, alignItems: 'flex-end' }}>
                             {!isMe && (
-                              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#1e40af', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 11, fontWeight: 700, color: '#fff' }}>
-                                BA
+                              <div style={{ width: 30, height: 30, borderRadius: '50%', background: isAI ? '#7c3aed' : '#1e40af', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 11, fontWeight: 700, color: '#fff' }}>
+                                {isAI ? 'AI' : 'BA'}
                               </div>
                             )}
                             <div style={{ maxWidth: '70%' }}>
                               {!isMe && (
-                                <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 3px 4px' }}>Barangay Admin</p>
+                                <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 3px 4px' }}>{isAI ? 'AI Assistant' : 'Barangay Admin'}</p>
                               )}
                               <div style={{
                                 padding: '10px 14px',
@@ -374,13 +392,12 @@ export default function UserBarangaySupport() {
                     </div>
                     <ul className="uhtl-hours">
                       <li className="uhtl-hours-item">
-                        <span className="uhtl-hours-day">Status</span>
+                        <span className="uhtl-hours-day">Assisted by</span>
                         <span style={{
                           fontSize: 12, fontWeight: 700, padding: '2px 9px', borderRadius: 6,
-                          background: conversation.status === 'open' ? '#f0fdf4' : '#f3f4f6',
-                          color: conversation.status === 'open' ? '#16a34a' : '#6b7280',
-                          textTransform: 'capitalize',
-                        }}>{conversation.status}</span>
+                          background: conversation.mode === 'human' ? '#eff6ff' : '#faf5ff',
+                          color: conversation.mode === 'human' ? '#2563eb' : '#7c3aed',
+                        }}>{conversation.mode === 'human' ? (conversation.takenOverBy || 'Barangay Staff') : 'AI Assistant'}</span>
                       </li>
                       <li className="uhtl-hours-item">
                         <span className="uhtl-hours-day">Messages</span>

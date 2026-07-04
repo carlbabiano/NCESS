@@ -110,7 +110,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                   <item.icon size={18} />
                 </span>
                 <span className="sidebar__nav-label">{item.label}</span>
-                {item.path === '/userbarangaysupport' && supportUnreadCount > 0 && (
+                {item.path === '/userbarangaysupport' && !active && supportUnreadCount > 0 && (
                   <span className="sidebar__nav-badge">{supportUnreadCount > 9 ? '9+' : supportUnreadCount}</span>
                 )}
               </button>

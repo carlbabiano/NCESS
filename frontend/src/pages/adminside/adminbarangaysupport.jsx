@@ -250,6 +250,33 @@ export default function AdminHotline() {
     setOpenMenu(null);
   };
 
+  // ── AI takeover / hand back ─────────────────────────────────────────────────
+  const takeOverConversation = async (convId) => {
+    const token = getToken();
+    const res = await fetch(`${API}/chat/admin/conversations/${convId}/takeover`, {
+      method:  'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setConversations(prev => prev.map(c => c._id === convId ? updated : c));
+    }
+    setOpenMenu(null);
+  };
+
+  const handBackToAI = async (convId) => {
+    const token = getToken();
+    const res = await fetch(`${API}/chat/admin/conversations/${convId}/handback`, {
+      method:  'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setConversations(prev => prev.map(c => c._id === convId ? updated : c));
+    }
+    setOpenMenu(null);
+  };
+
   // ── Filtered conversations ─────────────────────────────────────────────────
   const filtered = conversations.filter(c => {
     const matchSearch = c.userName.toLowerCase().includes(search.toLowerCase()) ||
@@ -264,7 +291,6 @@ export default function AdminHotline() {
     return matchSearch && matchStatus;
   });
 
-  const totalUnread = conversations.reduce((s, c) => s + (c.unreadAdmin || 0), 0);
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -286,11 +312,6 @@ export default function AdminHotline() {
               <div>
                 <h1 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   Chat Operator
-                  {totalUnread > 0 && (
-                    <span style={{ fontSize: 13, fontWeight: 700, background: '#ef4444', color: '#fff', borderRadius: 20, padding: '2px 9px' }}>
-                      {totalUnread}
-                    </span>
-                  )}
                 </h1>
                 <p>Manage resident conversations and respond to inquiries in real-time.</p>
               </div>
@@ -393,10 +414,9 @@ export default function AdminHotline() {
                         <span className="htl-caller__verified">Resident</span>
                         <span style={{
                           fontSize: 11.5, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
-                          background: STATUS_COLOR[activeConv.status]?.bg,
-                          color: STATUS_COLOR[activeConv.status]?.color,
-                          textTransform: 'capitalize',
-                        }}>{activeConv.status}</span>
+                          background: activeConv.mode === 'human' ? '#eff6ff' : '#faf5ff',
+                          color: activeConv.mode === 'human' ? '#2563eb' : '#7c3aed',
+                        }}>{activeConv.mode === 'human' ? `Staff: ${activeConv.takenOverBy || 'You'}` : 'AI Assistant'}</span>
                       </div>
                       <div className="htl-caller__meta-row">
                         <span className="htl-caller__meta-item">
@@ -411,6 +431,27 @@ export default function AdminHotline() {
                       </div>
                     </div>
                     <div className="htl-caller__badge-wrap">
+                      {activeConv.mode === 'human' ? (
+                        <button
+                          onClick={() => handBackToAI(activeConv._id)}
+                          style={{
+                            fontSize: 12.5, fontWeight: 600, padding: '6px 12px', borderRadius: 8,
+                            border: '1px solid #e5e7eb', background: '#fff', color: '#374151',
+                            cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', marginRight: 8,
+                          }}>
+                          Hand back to AI
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => takeOverConversation(activeConv._id)}
+                          style={{
+                            fontSize: 12.5, fontWeight: 600, padding: '6px 12px', borderRadius: 8,
+                            border: 'none', background: '#2563eb', color: '#fff',
+                            cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', marginRight: 8,
+                          }}>
+                          Take Over
+                        </button>
+                      )}
                       {/* Actions menu */}
                       <div className="htl-table__menu-wrap" onClick={e => e.stopPropagation()}>
                         <button className="htl-table__menu-btn" onClick={() => setOpenMenu(openMenu === 'header' ? null : 'header')}>
@@ -440,12 +481,16 @@ export default function AdminHotline() {
                       </div>
                     ) : messages.map((msg) => {
                       const isAdmin = msg.sender === 'admin';
+                      const isAI = msg.sender === 'ai';
                       return (
                         <div key={msg._id} style={{ display: 'flex', justifyContent: isAdmin ? 'flex-end' : 'flex-start', gap: 8, alignItems: 'flex-end' }}>
-                          {!isAdmin && <InitialAvatar name={activeConv.userName} />}
+                          {!isAdmin && (isAI
+                            ? <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 12, fontWeight: 700, color: '#fff' }}>AI</div>
+                            : <InitialAvatar name={activeConv.userName} />
+                          )}
                           <div style={{ maxWidth: '68%' }}>
                             {!isAdmin && (
-                              <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 3px 4px' }}>{activeConv.userName}</p>
+                              <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 3px 4px' }}>{isAI ? 'AI Assistant' : activeConv.userName}</p>
                             )}
                             <div style={{
                               padding: '10px 14px',

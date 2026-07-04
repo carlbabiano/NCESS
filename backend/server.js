@@ -34,6 +34,7 @@ import hotlineRoutes       from "./routes/hotlineRoutes.js";
 import availabilityRoutes  from "./routes/availabilityRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import { Message, Conversation } from "./models/hotline.js";
+import { generateAIReply } from "./services/geminiService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -161,6 +162,38 @@ io.on("connection", (socket) => {
           unreadUser: updatedConv.unreadUser,
           conversationId,
         });
+      }
+
+      // AI auto-reply: only for resident messages, and only while no admin
+      // has taken over the conversation.
+      if (!isAdmin && updatedConv.mode !== "human") {
+        try {
+          const recentMessages = (await Message.find({ conversationId })
+            .sort({ createdAt: -1 })
+            .limit(20)).reverse();
+
+          const replyText = await generateAIReply(recentMessages);
+
+          const aiMsg = await Message.create({
+            conversationId,
+            sender:      "ai",
+            senderName:  "AI Assistant",
+            text:        replyText,
+            readByAdmin: false,
+            readByUser:  true,
+          });
+
+          const aiUpdatedConv = await Conversation.findByIdAndUpdate(
+            conversationId,
+            { lastMessage: replyText, lastMessageAt: new Date() },
+            { returnDocument: "after" }
+          );
+
+          io.to(`conv_${conversationId}`).emit("new_message", aiMsg);
+          io.to("admin_room").emit("conversation_updated", aiUpdatedConv);
+        } catch (aiErr) {
+          console.error("AI reply error:", aiErr);
+        }
       }
 
     } catch (err) {
