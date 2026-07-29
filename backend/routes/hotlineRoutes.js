@@ -135,11 +135,18 @@ router.post("/chat/conversations/:id/messages", requireUser, async (req, res) =>
       readByUser:     true,
     });
 
-    await Conversation.findByIdAndUpdate(req.params.id, {
-      lastMessage:   text.trim(),
-      lastMessageAt: new Date(),
-      $inc: { unreadAdmin: 1 },
-    });
+    const updatedConv = await Conversation.findByIdAndUpdate(
+      req.params.id,
+      {
+        lastMessage:   text.trim(),
+        lastMessageAt: new Date(),
+        $inc: { unreadAdmin: 1 },
+      },
+      { returnDocument: "after" }
+    );
+
+    req.app.get("io")?.to(`conv_${req.params.id}`).emit("new_message", msg);
+    req.app.get("io")?.to("admin_room").emit("conversation_updated", updatedConv);
 
     // AI auto-reply, mirroring the socket path — only while no admin has taken over.
     if (conv.mode !== "human") {
@@ -245,6 +252,9 @@ router.post("/chat/admin/conversations/:id/messages", requireAdmin, async (req, 
         conversationId: req.params.id,
       });
     }
+
+    req.app.get("io")?.to(`conv_${req.params.id}`).emit("new_message", msg);
+    req.app.get("io")?.to("admin_room").emit("conversation_updated", updatedConv);
 
     res.status(201).json(msg);
   } catch (err) {

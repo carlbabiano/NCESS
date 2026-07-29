@@ -5,7 +5,14 @@ import UserTopbar from '../../components/usertopbar';
 import './userbarangaysupport.css';
 
 const API  = import.meta.env.VITE_BACKEND_URL
-const SOCK = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_BACKEND_URL?.replace('/api', '') || ''
+const getSocketUrl = () => {
+  const raw =
+    import.meta.env.VITE_SOCKET_URL ||
+    import.meta.env.VITE_BACKEND_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
+  return raw.replace(/\/api\/?$/, '').replace(/\/$/, '');
+};
+const SOCK = getSocketUrl();
 
 const FAQS = [
   {
@@ -75,6 +82,7 @@ export default function UserBarangaySupport() {
   const messagesEndRef     = useRef(null);
   const messagesContainerRef = useRef(null);
   const typingTimer        = useRef(null);
+  const conversationRef    = useRef(null);
   const currentUser    = getUserFromToken();
   const normalizedSearch = search.trim().toLowerCase();
   const filteredFaqs = FAQS
@@ -83,6 +91,10 @@ export default function UserBarangaySupport() {
       if (!normalizedSearch) return true;
       return `${faq.q} ${faq.a}`.toLowerCase().includes(normalizedSearch);
     });
+
+  useEffect(() => {
+    conversationRef.current = conversation;
+  }, [conversation]);
 
   // ── Fetch conversation + messages ──────────────────────────────────────────
   const loadConversation = useCallback(async () => {
@@ -108,16 +120,63 @@ export default function UserBarangaySupport() {
     }
   }, []);
 
+  const confirmSentMessage = useCallback((confirmedMsg, optimisticId) => {
+    if (!confirmedMsg?._id) return;
+    setMessages(prev => {
+      const filtered = prev.filter(m =>
+        m._id !== optimisticId &&
+        !(m.optimistic && m.text === confirmedMsg.text && m.sender === confirmedMsg.sender)
+      );
+      if (filtered.some(m => m._id === confirmedMsg._id)) return filtered;
+      return [...filtered, confirmedMsg];
+    });
+  }, []);
+
+  const applyConversationUpdate = useCallback((updatedConv) => {
+    if (!updatedConv?._id) return;
+    setConversation(prev => (prev && prev._id === updatedConv._id)
+      ? { ...prev, ...updatedConv }
+      : prev);
+  }, []);
+
   // ── Socket.io ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const token = getToken();
     if (!token) return;
 
-    const socket = io(SOCK, { auth: { token }, transports: ['websocket'], reconnection: true, reconnectionAttempts: 10 });
+    const socket = io(SOCK, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 2000,
+      timeout: 20000,
+    });
     socketRef.current = socket;
+    setConnected(Boolean(socket.connected));
 
-    socket.on('connect',    () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
+    socket.on('connect', () => {
+      if (socketRef.current !== socket) return;
+      setConnected(true);
+      if (conversationRef.current?._id) socket.emit('join_conversation', conversationRef.current._id);
+    });
+    socket.on('reconnect', () => {
+      if (socketRef.current !== socket) return;
+      setConnected(true);
+      if (conversationRef.current?._id) socket.emit('join_conversation', conversationRef.current._id);
+    });
+    socket.on('disconnect', () => {
+      if (socketRef.current === socket) setConnected(false);
+    });
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+      if (socketRef.current === socket) setConnected(false);
+    });
+    socket.on('connect_timeout', () => {
+      console.warn('Socket connection timed out');
+      if (socketRef.current === socket) setConnected(false);
+    });
 
     socket.on('new_message', (msg) => {
       setMessages(prev => {
@@ -153,15 +212,19 @@ export default function UserBarangaySupport() {
         : prev);
     });
 
-    return () => socket.disconnect();
+    return () => {
+      socket.off();
+      socket.disconnect();
+      if (socketRef.current === socket) socketRef.current = null;
+    };
   }, []);
 
   // ── Join room once conversation is known ───────────────────────────────────
   useEffect(() => {
-    if (conversation && socketRef.current) {
+    if (conversation && socketRef.current && connected) {
       socketRef.current.emit('join_conversation', conversation._id);
     }
-  }, [conversation]);
+  }, [conversation, connected]);
 
   useEffect(() => { loadConversation(); }, [loadConversation]);
 
@@ -190,21 +253,45 @@ export default function UserBarangaySupport() {
     setMessages(prev => [...prev, optimistic]);
     setInput('');
 
-    if (socketRef.current) {
-      socketRef.current.emit('typing_stop', { conversationId: conversation._id });
-      socketRef.current.emit('send_message', {
-        conversationId: conversation._id,
-        text:           optimistic.text,
-      });
-    } else {
-      // Fallback REST
+    const sendByRest = async () => {
       const token = getToken();
-      await fetch(`${API}/chat/conversations/${conversation._id}/messages`, {
+      const res = await fetch(`${API}/chat/conversations/${conversation._id}/messages`, {
         method:  'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body:    JSON.stringify({ text: optimistic.text }),
       });
-      await loadConversation();
+      if (!res.ok) throw new Error('Unable to send message');
+      const saved = await res.json();
+      confirmSentMessage(saved, optimistic._id);
+    };
+
+    try {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('typing_stop', { conversationId: conversation._id });
+        const response = await new Promise((resolve, reject) => {
+          socketRef.current.timeout(8000).emit('send_message', {
+            conversationId: conversation._id,
+            text:           optimistic.text,
+          }, (err, result) => {
+            if (err) reject(err);
+            else if (!result?.ok) reject(new Error(result?.message || 'Unable to send message'));
+            else resolve(result);
+          });
+        });
+        confirmSentMessage(response.message, optimistic._id);
+        applyConversationUpdate(response.conversation);
+      } else {
+        await sendByRest();
+      }
+    } catch (err) {
+      console.error('Socket send failed, using REST fallback:', err);
+      try {
+        await sendByRest();
+      } catch (restErr) {
+        console.error('Send message failed:', restErr);
+        setMessages(prev => prev.filter(m => m._id !== optimistic._id));
+        setInput(optimistic.text);
+      }
     }
 
     setSending(false);
@@ -217,7 +304,7 @@ export default function UserBarangaySupport() {
   // ── Typing indicator ───────────────────────────────────────────────────────
   const handleInputChange = (e) => {
     setInput(e.target.value);
-    if (!conversation || !socketRef.current) return;
+    if (!conversation || !socketRef.current?.connected) return;
     socketRef.current.emit('typing_start', { conversationId: conversation._id });
     clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => {

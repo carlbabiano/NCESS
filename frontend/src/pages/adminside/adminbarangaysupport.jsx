@@ -6,7 +6,14 @@ import { AdminFilterBar } from '../../components/adminfilterbar';
 import './adminbarangaysupport.css';
 
 const API  = import.meta.env.VITE_BACKEND_URL
-const SOCK = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_BACKEND_URL?.replace('/api', '') || ''
+const getSocketUrl = () => {
+  const raw =
+    import.meta.env.VITE_SOCKET_URL ||
+    import.meta.env.VITE_BACKEND_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
+  return raw.replace(/\/api\/?$/, '').replace(/\/$/, '');
+};
+const SOCK = getSocketUrl();
 
 function getToken() {
   return localStorage.getItem('admin_token') || sessionStorage.getItem('admin_token');
@@ -67,8 +74,13 @@ export default function AdminHotline() {
   const messagesEndRef = useRef(null);
   const typingTimer    = useRef(null);
   const prevConvRef    = useRef(null);
+  const activeConvIdRef = useRef(null);
 
   const activeConv = conversations.find(c => c._id === activeConvId);
+
+  useEffect(() => {
+    activeConvIdRef.current = activeConvId;
+  }, [activeConvId]);
 
   // ── Load all conversations ─────────────────────────────────────────────────
   const loadConversations = useCallback(async () => {
@@ -80,13 +92,13 @@ export default function AdminHotline() {
       });
       const data = await res.json();
       setConversations(data);
-      if (!activeConvId && data.length > 0) setActiveConvId(data[0]._id);
+      if (!activeConvIdRef.current && data.length > 0) setActiveConvId(data[0]._id);
     } catch (err) {
       console.error('Load convs error:', err);
     } finally {
       setLoading(false);
     }
-  }, [activeConvId]);
+  }, []);
 
   // ── Load messages for active conversation ─────────────────────────────────
   const loadMessages = useCallback(async (convId) => {
@@ -108,16 +120,65 @@ export default function AdminHotline() {
     }
   }, []);
 
+  const confirmSentMessage = useCallback((confirmedMsg, optimisticId) => {
+    if (!confirmedMsg?._id) return;
+    setMessages(prev => {
+      const filtered = prev.filter(m =>
+        m._id !== optimisticId &&
+        !(m.optimistic && m.text === confirmedMsg.text && m.sender === confirmedMsg.sender)
+      );
+      if (filtered.some(m => m._id === confirmedMsg._id)) return filtered;
+      return [...filtered, confirmedMsg];
+    });
+  }, []);
+
+  const applyConversationUpdate = useCallback((updatedConv) => {
+    if (!updatedConv?._id) return;
+    setConversations(prev => {
+      const exists = prev.some(c => c._id === updatedConv._id);
+      if (exists) return prev.map(c => c._id === updatedConv._id ? updatedConv : c);
+      return [updatedConv, ...prev];
+    });
+  }, []);
+
   // ── Socket.io ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const token = getToken();
     if (!token) return;
 
-    const socket = io(SOCK, { auth: { token }, transports: ['websocket'], reconnection: true, reconnectionAttempts: 10 });
+    const socket = io(SOCK, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 2000,
+      timeout: 20000,
+    });
     socketRef.current = socket;
+    setConnected(Boolean(socket.connected));
 
-    socket.on('connect',    () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
+    socket.on('connect', () => {
+      if (socketRef.current !== socket) return;
+      setConnected(true);
+      if (activeConvIdRef.current) socket.emit('join_conversation', activeConvIdRef.current);
+    });
+    socket.on('reconnect', () => {
+      if (socketRef.current !== socket) return;
+      setConnected(true);
+      if (activeConvIdRef.current) socket.emit('join_conversation', activeConvIdRef.current);
+    });
+    socket.on('disconnect', () => {
+      if (socketRef.current === socket) setConnected(false);
+    });
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+      if (socketRef.current === socket) setConnected(false);
+    });
+    socket.on('connect_timeout', () => {
+      console.warn('Socket connection timed out');
+      if (socketRef.current === socket) setConnected(false);
+    });
 
     socket.on('new_message', (msg) => {
       setMessages(prev => {
@@ -130,12 +191,13 @@ export default function AdminHotline() {
       setUserTyping(false);
 
       // If the new message is for the active conversation and sent by user, mark as read
-      if (msg.conversationId === activeConvId && msg.sender === "user") {
+      const currentConvId = activeConvIdRef.current;
+      if (msg.conversationId === currentConvId && msg.sender === "user") {
         // Reset unread count locally
-        setConversations(prev => prev.map(c => c._id === activeConvId ? { ...c, unreadAdmin: 0 } : c));
+        setConversations(prev => prev.map(c => c._id === currentConvId ? { ...c, unreadAdmin: 0 } : c));
         // Mark as read on backend and reload conversations
         const token = getToken();
-        fetch(`${API}/chat/admin/conversations/${activeConvId}/read`, {
+        fetch(`${API}/chat/admin/conversations/${currentConvId}/read`, {
           method: 'PATCH',
           headers: { Authorization: `Bearer ${token}` },
         }).then(() => {
@@ -146,32 +208,32 @@ export default function AdminHotline() {
     });
 
     socket.on('conversation_updated', (updatedConv) => {
-      setConversations(prev => {
-        const exists = prev.find(c => c._id === updatedConv._id);
-        if (exists) return prev.map(c => c._id === updatedConv._id ? updatedConv : c);
-        return [updatedConv, ...prev];
-      });
+      applyConversationUpdate(updatedConv);
     });
 
     socket.on('user_typing', ({ conversationId, isAdmin }) => {
-      if (!isAdmin && conversationId === activeConvId) setUserTyping(true);
+      if (!isAdmin && conversationId === activeConvIdRef.current) setUserTyping(true);
     });
 
     socket.on('user_stopped_typing', ({ conversationId }) => {
-      if (conversationId === activeConvId) setUserTyping(false);
+      if (conversationId === activeConvIdRef.current) setUserTyping(false);
     });
 
-    return () => socket.disconnect();
-  }, []);
+    return () => {
+      socket.off();
+      socket.disconnect();
+      if (socketRef.current === socket) socketRef.current = null;
+    };
+  }, [applyConversationUpdate, confirmSentMessage, loadConversations]);
 
   // ── Update active conversation socket room ─────────────────────────────────
   useEffect(() => {
     if (!socketRef.current) return;
     if (prevConvRef.current) socketRef.current.emit('leave_conversation', prevConvRef.current);
-    if (activeConvId)        socketRef.current.emit('join_conversation',  activeConvId);
+    if (activeConvId && connected) socketRef.current.emit('join_conversation', activeConvId);
     prevConvRef.current = activeConvId;
     setUserTyping(false);
-  }, [activeConvId]);
+  }, [activeConvId, connected]);
 
   useEffect(() => { loadConversations(); }, []);
   useEffect(() => {
@@ -205,20 +267,45 @@ export default function AdminHotline() {
     setMessages(prev => [...prev, optimistic]);
     setInput('');
 
-    if (socketRef.current) {
-      socketRef.current.emit('typing_stop', { conversationId: activeConvId });
-      socketRef.current.emit('send_message', {
-        conversationId: activeConvId,
-        text:           optimistic.text,
-      });
-    } else {
+    const sendByRest = async () => {
       const token = getToken();
-      await fetch(`${API}/chat/admin/conversations/${activeConvId}/messages`, {
+      const res = await fetch(`${API}/chat/admin/conversations/${activeConvId}/messages`, {
         method:  'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body:    JSON.stringify({ text: optimistic.text }),
       });
-      await loadConversations();
+      if (!res.ok) throw new Error('Unable to send message');
+      const saved = await res.json();
+      confirmSentMessage(saved, optimistic._id);
+    };
+
+    try {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('typing_stop', { conversationId: activeConvId });
+        const response = await new Promise((resolve, reject) => {
+          socketRef.current.timeout(8000).emit('send_message', {
+            conversationId: activeConvId,
+            text:           optimistic.text,
+          }, (err, result) => {
+            if (err) reject(err);
+            else if (!result?.ok) reject(new Error(result?.message || 'Unable to send message'));
+            else resolve(result);
+          });
+        });
+        confirmSentMessage(response.message, optimistic._id);
+        applyConversationUpdate(response.conversation);
+      } else {
+        await sendByRest();
+      }
+    } catch (err) {
+      console.error('Socket send failed, using REST fallback:', err);
+      try {
+        await sendByRest();
+      } catch (restErr) {
+        console.error('Send message failed:', restErr);
+        setMessages(prev => prev.filter(m => m._id !== optimistic._id));
+        setInput(optimistic.text);
+      }
     }
 
     setSending(false);
@@ -230,7 +317,7 @@ export default function AdminHotline() {
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
-    if (!activeConvId || !socketRef.current) return;
+    if (!activeConvId || !socketRef.current?.connected) return;
     socketRef.current.emit('typing_start', { conversationId: activeConvId });
     clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => {

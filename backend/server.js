@@ -44,6 +44,7 @@ const httpServer = createServer(app);
 
 const defaultAllowedOrigins = [
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
   "http://192.168.100.12:5173",
   "https://ncess.vercel.app",
   "https://ncess.online",
@@ -61,10 +62,20 @@ const envAllowedOrigins = [
   .filter(Boolean);
 
 const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envAllowedOrigins])];
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+
+  const normalized = origin.replace(/\/$/, "");
+  if (allowedOrigins.includes(normalized)) return true;
+
+  return /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalized)
+    || /^(https?:\/\/)[\w.-]+\.vercel\.(app|dev)$/i.test(normalized)
+    || /^(https?:\/\/)[\w.-]+\.netlify\.app$/i.test(normalized);
+};
 
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ""))) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
@@ -114,15 +125,28 @@ io.on("connection", (socket) => {
   }
 
   // Send message
-  socket.on("send_message", async ({ conversationId, text }) => {
-    if (!text?.trim() || !conversationId) return;
+  socket.on("send_message", async ({ conversationId, text }, ack) => {
+    const reply = (payload) => {
+      if (typeof ack === "function") ack(payload);
+    };
+
+    if (!text?.trim() || !conversationId) {
+      reply({ ok: false, message: "Message text and conversation are required" });
+      return;
+    }
 
     try {
       const conv = await Conversation.findById(conversationId);
-      if (!conv) return;
+      if (!conv) {
+        reply({ ok: false, message: "Conversation not found" });
+        return;
+      }
 
       // Authorization check
-      if (!isAdmin && String(conv.userId) !== String(user.id)) return;
+      if (!isAdmin && String(conv.userId) !== String(user.id)) {
+        reply({ ok: false, message: "Forbidden" });
+        return;
+      }
 
       const senderRole = isAdmin ? "admin" : "user";
       const senderName = isAdmin ? "Barangay Admin" : (user.fullName || user.email);
@@ -164,6 +188,8 @@ io.on("connection", (socket) => {
         });
       }
 
+      reply({ ok: true, message: msg, conversation: updatedConv });
+
       // AI auto-reply: only for resident messages, and only while no admin
       // has taken over the conversation.
       if (!isAdmin && updatedConv.mode !== "human") {
@@ -198,6 +224,7 @@ io.on("connection", (socket) => {
 
     } catch (err) {
       console.error("Socket send_message error:", err);
+      reply({ ok: false, message: "Server error" });
     }
   });
 
