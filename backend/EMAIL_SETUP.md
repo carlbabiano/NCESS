@@ -1,116 +1,89 @@
 # Email Configuration Guide for Password Reset
 
-The forgot password functionality now sends actual emails to users' email addresses. Follow the instructions below to set it up.
+The resident forgot password flow sends a 6-digit reset code through SendGrid.
 
-## Quick Setup (Gmail)
+## Quick Setup (SendGrid)
 
-### Step 1: Create a Gmail App Password
-1. Go to https://myaccount.google.com/apppasswords
-2. Sign in with your Gmail account (use 2-factor authentication if required)
-3. Select "Mail" and "Windows Computer" (or your device)
-4. Google will generate a 16-character app password
-5. Copy the password (format: `xxxx xxxx xxxx xxxx`)
+### Step 1: Create a SendGrid API key
 
-### Step 2: Update .env
-In `backend/.env`, uncomment and update the Gmail section:
-```
-EMAIL_SERVICE=gmail
-GMAIL_EMAIL=your-email@gmail.com
-GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+1. Sign in to SendGrid.
+2. Go to Settings > API Keys.
+3. Create an API key with Mail Send permission.
+4. Copy the API key. SendGrid only shows it once.
+
+### Step 2: Verify a sender
+
+In SendGrid, verify either a single sender email address or a domain. The `SENDGRID_FROM_EMAIL` value must be a verified sender.
+
+### Step 3: Update .env
+
+In `backend/.env`, add:
+
+```bash
+SENDGRID_API_KEY=SG.your-sendgrid-api-key
+SENDGRID_FROM_EMAIL=verified-sender@example.com
+SENDGRID_FROM_NAME=NCESS
+EMAIL_TIMEOUT_MS=10000
 FRONTEND_URL=http://localhost:5173
 ```
 
-### Step 3: Restart Backend
+`SENDGRID_FROM_NAME` is optional. If omitted, emails are sent as `NCESS`. `EMAIL_TIMEOUT_MS` is optional and defaults to `10000`.
+
+### Step 4: Restart Backend
+
 ```bash
 npm start
 # or
 npm run dev
 ```
 
-You should see in the console:
-```
-[EmailService] ✓ Connected and ready to send emails
-```
+You should see:
 
-## Alternative: Outlook/Hotmail
-
-If using Outlook instead of Gmail:
-
+```text
+[EmailService] SendGrid initialized
+[EmailService] SendGrid configured and ready to send emails
 ```
-SMTP_HOST=smtp-mail.outlook.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_EMAIL=your-email@outlook.com
-SMTP_PASSWORD=your-password
-FRONTEND_URL=http://localhost:5173
-```
-
-## Alternative: Other Email Providers
-
-For other providers (SendGrid, Mailgun, custom SMTP), configure:
-```
-SMTP_HOST=your-smtp-host
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_EMAIL=your-email@example.com
-SMTP_PASSWORD=your-password
-FRONTEND_URL=http://localhost:5173
-```
-
-Common SMTP servers:
-- **Gmail**: `smtp.gmail.com` (port 587, use app password)
-- **Outlook**: `smtp-mail.outlook.com` (port 587)
-- **Yahoo**: `smtp.mail.yahoo.com` (port 587)
-- **SendGrid**: `smtp.sendgrid.net` (port 587)
 
 ## Testing the Flow
 
-1. **Frontend**: Go to user login page
+1. Open the user login page.
 2. Click "Forgot password?"
-3. Enter an email address
-4. Check the email inbox (or spam folder)
-5. Click the reset link in the email
-6. Enter new password and submit
-7. Login with new password
+3. Enter a resident email address.
+4. Check the email inbox or spam folder.
+5. Enter the reset code.
+6. Set the new password.
+7. Log in with the new password.
 
 ## Troubleshooting
 
-### "Email service not configured" warning
-- Check that `EMAIL_SERVICE=gmail` OR SMTP settings are in `.env`
-- Ensure `GMAIL_EMAIL` and `GMAIL_APP_PASSWORD` are set correctly
-- Restart the backend server
+### "Email service is not configured"
 
-### Gmail app password not working
-- Make sure 2-Factor Authentication is enabled on your Gmail account
-- Don't use your regular Gmail password, use the 16-character app password
-- The password format should be: `xxxx xxxx xxxx xxxx` (with spaces)
+- Check that `SENDGRID_API_KEY` is set.
+- Check that `SENDGRID_FROM_EMAIL` is set.
+- Restart the backend after changing `.env`.
 
-### Reset link not in email
-- Check email spam/junk folder
-- Verify email was sent by checking server console logs
-- Make sure `FRONTEND_URL` is set to your frontend address
+### SendGrid rejects the message
+
+- Make sure `SENDGRID_FROM_EMAIL` is verified in SendGrid.
+- Make sure the API key has Mail Send permission.
+- Check the backend console for `[EmailService]` errors returned by SendGrid.
 
 ### No email received
-- Check backend console for error messages with `[EmailService]` prefix
-- Verify email credentials are correct in `.env`
-- Some email providers may block password reset emails - check provider settings
-- Try a different email provider to test
+
+- Check spam or junk mail.
+- Verify the resident email address is correct.
+- Check SendGrid Activity for delivery, bounce, or block events.
 
 ## Production Deployment
 
-For production:
-1. Use a dedicated email service (SendGrid, Mailgun, AWS SES)
-2. Never commit `.env` with real credentials to git
-3. Use environment variables in your hosting platform
-4. Set `FRONTEND_URL` to your production URL (e.g., `https://yourdomain.com`)
-5. Consider rate limiting the forgot password endpoint
+1. Store SendGrid credentials in the hosting platform's environment variables.
+2. Never commit `.env` with real credentials to git.
+3. Use a verified domain sender for better deliverability.
+4. Set `FRONTEND_URL` to your production URL, for example `https://yourdomain.com`.
+5. Consider rate limiting the forgot password endpoint.
 
 ## Files Modified
 
-- `backend/services/emailService.js` - New email service
-- `backend/server.js` - Added email service initialization
-- `backend/routes/userRoutes.js` - Updated forgot-password endpoint
-- `backend/.env` - Added email configuration
-- `frontend/src/pages/userside/userlogin.jsx` - Added forgot password modal
-- `frontend/src/pages/userside/userresetpassword.jsx` - New reset password page
-- `frontend/src/App.jsx` - Added reset password route
+- `backend/services/emailService.js` - SendGrid email service
+- `backend/package.json` - SendGrid dependency
+- `backend/package-lock.json` - dependency lockfile

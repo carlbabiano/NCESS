@@ -1,14 +1,12 @@
-import nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 
-// Initialize transporter based on environment
-let transporter;
-const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS) || 15000; // Increased from 7s to 15s for Render
+let isEmailConfigured = false;
 
-const cleanCredential = value => String(value || '').replace(/\s+/g, '');
-const gmailEmail = () => String(process.env.GMAIL_EMAIL || '').trim();
-const smtpEmail = () => String(process.env.SMTP_EMAIL || '').trim();
-const senderEmail = () => gmailEmail() || smtpEmail();
-const gmailPort = () => Number(process.env.GMAIL_SMTP_PORT) || 465;
+const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS) || 10000;
+
+const sendgridApiKey = () => String(process.env.SENDGRID_API_KEY || '').trim();
+const senderEmail = () => String(process.env.SENDGRID_FROM_EMAIL || '').trim();
+const senderName = () => String(process.env.SENDGRID_FROM_NAME || 'NCESS').trim();
 
 const withTimeout = (promise, timeoutMs, timeoutMessage) => {
   let timeoutId;
@@ -20,62 +18,49 @@ const withTimeout = (promise, timeoutMs, timeoutMessage) => {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 };
 
-export const initializeEmailService = () => {
-  if (process.env.EMAIL_SERVICE === 'gmail') {
-    // For Gmail with App Password
-    console.log('[EmailService] Initializing Gmail transporter');
-    console.log('[EmailService] Email:', gmailEmail());
-    console.log('[EmailService] App Password configured:', !!process.env.GMAIL_APP_PASSWORD);
-    transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: gmailPort(),
-      secure: gmailPort() === 465,
-      family: 4,
-      connectionTimeout: EMAIL_TIMEOUT_MS,
-      greetingTimeout: EMAIL_TIMEOUT_MS,
-      socketTimeout: EMAIL_TIMEOUT_MS,
-      logger: true,
-      debug: true,
-      auth: {
-        user: gmailEmail(),
-        pass: cleanCredential(process.env.GMAIL_APP_PASSWORD),
-      },
-    });
-  } else if (process.env.SMTP_HOST) {
-    // For generic SMTP (Outlook, custom servers, etc.)
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true', // true for 465, false for 587
-      family: 4,
-      connectionTimeout: EMAIL_TIMEOUT_MS,
-      greetingTimeout: EMAIL_TIMEOUT_MS,
-      socketTimeout: EMAIL_TIMEOUT_MS,
-      auth: {
-        user: smtpEmail(),
-        pass: cleanCredential(process.env.SMTP_PASSWORD),
-      },
-    });
-  } else {
-    console.warn('[EmailService] Warning: Email service not configured. Password reset emails will not be sent.');
-    console.warn('[EmailService] Add EMAIL_SERVICE=gmail and GMAIL_EMAIL/GMAIL_APP_PASSWORD to .env');
-    console.warn('[EmailService] Or add SMTP_HOST, SMTP_PORT, SMTP_EMAIL, SMTP_PASSWORD to .env');
-    transporter = null;
+const getSendGridErrorMessage = (error) => {
+  const sendGridErrors = error?.response?.body?.errors;
+  if (Array.isArray(sendGridErrors) && sendGridErrors.length > 0) {
+    return sendGridErrors.map((item) => item.message).join('; ');
   }
+
+  return error.message;
+};
+
+export const initializeEmailService = () => {
+  const apiKey = sendgridApiKey();
+  const fromEmail = senderEmail();
+
+  if (!apiKey || !fromEmail) {
+    console.warn('[EmailService] Warning: SendGrid is not configured. Password reset emails will not be sent.');
+    console.warn('[EmailService] Add SENDGRID_API_KEY and SENDGRID_FROM_EMAIL to .env');
+    isEmailConfigured = false;
+    return;
+  }
+
+  sgMail.setApiKey(apiKey);
+  sgMail.setTimeout(EMAIL_TIMEOUT_MS);
+  isEmailConfigured = true;
+
+  console.log('[EmailService] SendGrid initialized');
+  console.log('[EmailService] Sender:', `"${senderName()}" <${fromEmail}>`);
+  console.log('[EmailService] Timeout:', `${EMAIL_TIMEOUT_MS}ms`);
 };
 
 // Send password reset email with 6-digit code
 export const sendPasswordResetEmail = async (userEmail, resetCode) => {
-  if (!transporter) {
-    console.warn(`[EmailService] Email not sent to ${userEmail} - service not configured`);
+  if (!isEmailConfigured) {
+    console.warn(`[EmailService] Email not sent to ${userEmail} - SendGrid is not configured`);
     return { ok: false, error: 'Email service is not configured' };
   }
 
   try {
-    const fromAddress = senderEmail();
-    const mailOptions = {
-      from: fromAddress ? `"NCESS" <${fromAddress}>` : undefined,
+    const message = {
       to: userEmail,
+      from: {
+        email: senderEmail(),
+        name: senderName(),
+      },
       subject: 'Password Reset Code - NCESS',
       html: `
         <!DOCTYPE html>
@@ -101,7 +86,7 @@ export const sendPasswordResetEmail = async (userEmail, resetCode) => {
               <div class="content">
                 <p>Hello,</p>
                 <p>You requested to reset your password for your NCESS account. Use this code to proceed:</p>
-                
+
                 <div class="code-box">
                   <div class="code-display">${resetCode}</div>
                 </div>
@@ -111,7 +96,7 @@ export const sendPasswordResetEmail = async (userEmail, resetCode) => {
                 </p>
 
                 <div class="warning">
-                  <strong>⏱️ Code expires in 15 minutes</strong><br>
+                  <strong>Code expires in 15 minutes</strong><br>
                   If you didn't request this, please ignore this email. Your password will not change unless you enter this code.
                 </div>
 
@@ -134,36 +119,31 @@ export const sendPasswordResetEmail = async (userEmail, resetCode) => {
       text: `Password Reset Code\n\nYour password reset code is: ${resetCode}\n\nThis code is valid for 15 minutes.\n\nIf you didn't request this, please ignore this email.`,
     };
 
-    const info = await withTimeout(
-      transporter.sendMail(mailOptions),
-      EMAIL_TIMEOUT_MS + 2000,
-      `Email send timed out after ${EMAIL_TIMEOUT_MS + 2000}ms`
+    const [response] = await withTimeout(
+      sgMail.send(message),
+      EMAIL_TIMEOUT_MS,
+      `SendGrid request timed out after ${EMAIL_TIMEOUT_MS}ms`
     );
-    console.log(`[EmailService] ✓ Password reset code sent to ${userEmail}`);
-    console.log(`[EmailService] Message ID: ${info.messageId}`);
-    console.log(`[EmailService] Accepted: ${(info.accepted || []).join(', ') || 'none'}`);
-    console.log(`[EmailService] Rejected: ${(info.rejected || []).join(', ') || 'none'}`);
-    console.log(`[EmailService] SMTP response: ${info.response || 'none'}`);
-    return { ok: true, info };
+
+    console.log(`[EmailService] Password reset code sent to ${userEmail}`);
+    console.log(`[EmailService] SendGrid status: ${response?.statusCode || 'unknown'}`);
+    console.log(`[EmailService] SendGrid message ID: ${response?.headers?.['x-message-id'] || 'none'}`);
+
+    return { ok: true, info: response };
   } catch (error) {
-    console.error(`[EmailService] Error sending email to ${userEmail}:`, error.message);
-    return { ok: false, error: error.message };
+    const errorMessage = getSendGridErrorMessage(error);
+    console.error(`[EmailService] Error sending email to ${userEmail}:`, errorMessage);
+    return { ok: false, error: errorMessage };
   }
 };
 
-// Verify email service connectivity
+// Verify email service configuration
 export const verifyEmailService = async () => {
-  if (!transporter) {
-    console.warn('[EmailService] Email service not configured');
+  if (!isEmailConfigured) {
+    console.warn('[EmailService] SendGrid is not configured');
     return false;
   }
 
-  try {
-    await transporter.verify();
-    console.log('[EmailService] ✓ Connected and ready to send emails');
-    return true;
-  } catch (error) {
-    console.error('[EmailService] ✗ Failed to verify:', error.message);
-    return false;
-  }
+  console.log('[EmailService] SendGrid configured and ready to send emails');
+  return true;
 };
