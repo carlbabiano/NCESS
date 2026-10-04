@@ -66,7 +66,11 @@ export default function UserResetPassword() {
         return;
       }
 
-      setError(data.message || 'Failed to reset password.');
+      setError(
+        res.status === 404
+          ? 'No NCESS resident account was found for that email. Please check the email address used for the password reset request.'
+          : data.message || 'Failed to reset password.'
+      );
     } catch {
       setError('Unable to connect to the server. Please try again.');
     } finally {

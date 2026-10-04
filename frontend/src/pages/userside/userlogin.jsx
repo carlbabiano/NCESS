@@ -578,12 +578,17 @@ export default function UserLogin() {
       const data = await res.json();
 
       if (res.ok) {
-          setForgotError('');
+        setForgotError('');
         setShowCodeEntry(true);
         return;
       }
 
-      setForgotError(data.message || 'Unable to process forgot password request.');
+      setShowCodeEntry(false);
+      setForgotError(
+        res.status === 404
+          ? `No NCESS resident account was found for ${forgotEmail.trim()}. Please check the email address and try again.`
+          : data.message || 'Unable to process forgot password request.'
+      );
     } catch (err) {
       setForgotError(
         err.name === 'AbortError'
