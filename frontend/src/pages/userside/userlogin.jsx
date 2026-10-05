@@ -629,7 +629,7 @@ export default function UserLogin() {
             <p className="ulog-left__eyebrow">NCESS · Resident Login</p>
             <div className="ulog-left__title-block">
               <h2 className="ulog-left__title">NCESS</h2>
-              <p className="ulog-left__subtitle">New Cabalan E-Service System</p>
+              <p className="ulog-left__subtitle">New Cabalan E-Services System</p>
             </div>
             <p className="ulog-left__desc">Sign in to access barangay services, track complaints, and stay connected with your local government.</p>
           </div>
@@ -655,7 +655,7 @@ export default function UserLogin() {
             <img src={newcablogo} alt="New Cabalan seal" className="ulog-brand__seal" />
             <div className="ulog-brand__text">
               <p className="ulog-brand__name">NCESS</p>
-              <p className="ulog-brand__sub">New Cabalan E-Service System</p>
+              <p className="ulog-brand__sub">New Cabalan E-Services System</p>
             </div>
           </div>
 
@@ -788,7 +788,7 @@ export default function UserLogin() {
             Create an Account
           </a>
 
-          <p className="ulog-footer">© 2026 New Cabalan E-Service System (NCESS)</p>
+          <p className="ulog-footer">© 2026 New Cabalan E-Services System (NCESS)</p>
         </div>
       </div>
 

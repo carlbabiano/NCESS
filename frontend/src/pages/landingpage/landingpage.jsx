@@ -239,7 +239,7 @@ export default function LandingPage() {
           <img src={newcablogo} alt="New Cabalan Logo" className="lp-nav__logo" />
           <div>
             <div className="lp-nav__name">NCESS</div>
-            <div className="lp-nav__sub">New Cabalan E-Service System</div>
+            <div className="lp-nav__sub">New Cabalan E-Services System</div>
           </div>
         </div>
 
@@ -273,7 +273,7 @@ export default function LandingPage() {
                 <span className="lp-hero__title-accent">E-Governance</span><br />
                 Portal
               </h1>
-              <p className="lp-hero__subtitle" style={{ marginTop: 10 }}>New Cabalan E-Service System</p>
+              <p className="lp-hero__subtitle" style={{ marginTop: 10 }}>New Cabalan E-Services System</p>
             </div>
 
             <p className="lp-hero__desc">
@@ -462,11 +462,11 @@ export default function LandingPage() {
       {/* ── Footer ── */}
       <footer className="lp-footer">
         <div className="lp-footer__brand">
-          <p>NCESS — New Cabalan E-Service System</p>
+          <p>NCESS — New Cabalan E-Services System</p>
           <span>Barangay New Cabalan, Olongapo City, Zambales</span>
         </div>
         <p className="lp-footer__note">
-          © 2026 New Cabalan E-Service System. All rights reserved.<br />
+          © 2026 New Cabalan E-Services System. All rights reserved.<br />
           Unauthorized access is strictly prohibited.
         </p>
         <div className="lp-footer__links">

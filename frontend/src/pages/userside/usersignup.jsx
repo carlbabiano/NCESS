@@ -1089,7 +1089,7 @@ export default function UserSignup() {
             <p className="su-left__eyebrow">NCESS · Resident Registration</p>
             <div className="su-left__title-block">
               <h2 className="su-left__title">NCESS</h2>
-              <p className="su-left__subtitle">New Cabalan E-Service System</p>
+              <p className="su-left__subtitle">New Cabalan E-Services System</p>
             </div>
             <p className="su-left__desc">Register to access all barangay services online — fast, easy, and paperless.</p>
           </div>
@@ -1139,7 +1139,7 @@ export default function UserSignup() {
             <img src={newcablogo} alt="seal" className="su-mobile-seal"/>
             <div>
               <p className="su-mobile-title">NCESS</p>
-              <p className="su-mobile-sub">New Cabalan E-Service System</p>
+              <p className="su-mobile-sub">New Cabalan E-Services System</p>
             </div>
           </div>
 
@@ -1451,7 +1451,7 @@ export default function UserSignup() {
                   >
                     {agree && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>}
                   </button>
-                  <span>I agree to the <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('terms'); }}>Terms of Service</a> and <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('privacy'); }}>Privacy Policy</a> of the NCESS — New Cabalan E-Service System.</span>
+                  <span>I agree to the <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('terms'); }}>Terms of Service</a> and <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('privacy'); }}>Privacy Policy</a> of the NCESS — New Cabalan E-Services System.</span>
                 </div>
                 {errors.agree && <p className="su-field-error">{errors.agree}</p>}
               </div>

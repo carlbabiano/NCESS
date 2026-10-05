@@ -81,7 +81,7 @@ export const sendPasswordResetEmail = async (userEmail, resetCode) => {
             <div class="container">
               <div class="header">
                 <h1 style="margin: 0;">NCESS Password Reset</h1>
-                <p style="margin: 5px 0 0 0;">New Cabalan E-Service System</p>
+                <p style="margin: 5px 0 0 0;">New Cabalan E-Services System</p>
               </div>
               <div class="content">
                 <p>Hello,</p>
@@ -109,7 +109,7 @@ export const sendPasswordResetEmail = async (userEmail, resetCode) => {
 
                 <div class="footer">
                   <p>This is an automated message. Please do not reply to this email.</p>
-                  <p>&copy; 2026 New Cabalan E-Service System. All rights reserved.</p>
+                  <p>&copy; 2026 New Cabalan E-Services System. All rights reserved.</p>
                 </div>
               </div>
             </div>

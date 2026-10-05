@@ -81,7 +81,7 @@ export default function AdminLogin() {
             <p className="alog-left__eyebrow">Republic of the Philippines</p>
             <div className="alog-left__title-block">
               <h1 className="alog-left__title">NCESS</h1>
-              <p className="alog-left__location">New Cabalan E-Service System</p>
+              <p className="alog-left__location">New Cabalan E-Services System</p>
             </div>
             <p className="alog-left__desc">
               Serving our community through transparent governance,
@@ -105,7 +105,7 @@ export default function AdminLogin() {
             <img src={newcablogo} alt="seal" className="alog-mobile-seal" />
             <div>
               <p className="alog-mobile-title">NCESS</p>
-              <p className="alog-mobile-sub">New Cabalan E-Service System</p>
+              <p className="alog-mobile-sub">New Cabalan E-Services System</p>
             </div>
           </div>
 
@@ -114,7 +114,7 @@ export default function AdminLogin() {
             <img src={newcablogo} alt="New Cabalan seal" className="alog-brand__seal" />
             <div className="alog-brand__text">
               <p className="alog-brand__name">NCESS</p>
-              <p className="alog-brand__sub">New Cabalan E-Service System</p>
+              <p className="alog-brand__sub">New Cabalan E-Services System</p>
             </div>
           </div>
 
@@ -223,7 +223,7 @@ export default function AdminLogin() {
           </a>
 
           <p className="alog-footer-note">
-            © 2026 New Cabalan E-Service System (NCESS).<br/>
+            © 2026 New Cabalan E-Services System (NCESS).<br/>
             Unauthorized access is strictly prohibited.
           </p>
         </div>
